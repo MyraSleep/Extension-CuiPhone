@@ -13,7 +13,7 @@ export function mountPhoneUI(root) {
       composeMode:'feed',
       callTimer:null,
       callSeconds:0,
-      user:{handle:'my.archive',name:'你的名字',bio:'这是用户主页，可自定义。角色动态在 Feed 里看。',link:'',avatar:'',posts:0,followers:0,following:0,highlights:[],grid:[]},
+      user:{handle:'me',name:'未设置',bio:'在世界书里加 <user_profile> 设置你的账号，或在主页点击“编辑主页”。',link:'',avatar:'',posts:0,followers:0,following:0,highlights:[],grid:[]},
       avatars:{'@me':''},
       stories:[],
       posts:[],
@@ -70,11 +70,13 @@ export function mountPhoneUI(root) {
       const matches = [...String(text || '').matchAll(/<ins_story>\s*([\s\S]*?)\s*<\/ins_story>/g)];
       return matches.map(m => m[1].trim()).filter(Boolean).map(block => {
         const lines = block.split('\n').map(s => s.trim()).filter(Boolean);
-        const head = lines.shift() || '@user · 用户 | 00:00';
-        const hm = head.match(/^(@[^\s]+)\s*[·•]\s*(.*?)\s*\|\s*(\d{1,2}:\d{2})$/);
-        const handle = hm ? hm[1] : '@user';
-        const name = hm ? hm[2] : '用户';
-        const time = hm ? hm[3] : '00:00';
+        const head = lines.shift() || '';
+        // Accept "@handle · name | HH:MM [氛围/地点...]" (optional trailing text).
+        const hm = head.match(/^(@\S+)\s*[·•]\s*(.+?)\s*\|\s*(\d{1,2}:\d{2})(?:\s+(.*))?$/);
+        const handle = hm ? hm[1] : (head.match(/@\S+/)?.[0] || '');
+        const name = hm ? hm[2].trim() : '';
+        const time = hm ? hm[3] : '';
+        const mood = hm && hm[4] ? hm[4].trim() : '';
         let mediaUrl = '';
         const chips = [];
         lines.forEach(line => {
@@ -83,8 +85,8 @@ export function mountPhoneUI(root) {
           if(/^\[音乐/.test(line)){ chips.push({type:'music',text:line.replace(/^\[音乐\s*·?\s*/,'').replace(/\]$/,'')}); return; }
           chips.push({type:'text',text:line.replace(/^story\s*字幕[:：]?\s*/i,'')});
         });
-        if(!(handle in state.avatars)) state.avatars[handle] = '';
-        return {handle,name,time,avatar:state.avatars[handle] || '',mediaUrl,bg:'radial-gradient(circle at 52% 18%, rgba(255,255,255,.18), transparent 22%), linear-gradient(160deg,#0f172a,#334155 52%,#475569)',chips};
+        if(handle && !(handle in state.avatars)) state.avatars[handle] = '';
+        return {handle,name,time,mood,avatar:handle ? (state.avatars[handle] || '') : '',mediaUrl,bg:'radial-gradient(circle at 52% 18%, rgba(255,255,255,.18), transparent 22%), linear-gradient(160deg,#0f172a,#334155 52%,#475569)',chips};
       });
     }
 
@@ -122,20 +124,29 @@ export function mountPhoneUI(root) {
       ];
       return groups.map((group, idx) => {
         const lines = group.split('\n').map(s => s.trim()).filter(Boolean);
-        const head = lines.shift() || '@user · 用户 | 00:00';
-        const media = lines.shift() || '[图 · 默认图片描述]';
+        const head = lines.shift() || '';
+        const media = lines.shift() || '';
         let mediaUrl = '';
         if(/^图片[:：]/i.test(lines[0] || '')) mediaUrl = lines.shift().replace(/^图片[:：]\s*/i,'').trim();
-        let likes = 0;
+        // Like count: explicit ❤️ line wins; otherwise compute a stable
+        // pseudo-random number from handle+caption so the same post always
+        // shows the same number across refreshes (no jitter).
+        let likes = -1; // sentinel: not set
         if(/^❤️/.test(lines[0] || '')) likes = parseLikes(lines.shift());
         const caption = lines.shift() || '';
         const comments = lines;
-        const hm = head.match(/^(@[^\s]+)\s*[·•]\s*(.*?)\s*\|\s*(.*)$/);
-        const handle = hm ? hm[1] : '@user';
-        const name = hm ? hm[2] : '用户';
-        const place = hm ? hm[3] : '00:00';
-        if(!(handle in state.avatars)) state.avatars[handle] = '';
-        return {handle,name,place,likes,caption,comments,overlay:media,mediaUrl,avatar:state.avatars[handle] || '',bg:bgs[idx % bgs.length]};
+        const hm = head.match(/^(@\S+)\s*[·•]\s*(.+?)\s*\|\s*(.*)$/);
+        const handle = hm ? hm[1] : (head.match(/@\S+/)?.[0] || '');
+        const name = hm ? hm[2].trim() : '';
+        const place = hm ? hm[3].trim() : '';
+        if(handle && !(handle in state.avatars)) state.avatars[handle] = '';
+        if(likes < 0){
+          // Stable hash → likes between 80 and 4500.
+          let h = 0; const seed = handle + '|' + caption + '|' + media;
+          for(let i = 0; i < seed.length; i++){ h = ((h << 5) - h + seed.charCodeAt(i)) | 0; }
+          likes = 80 + Math.abs(h) % 4421;
+        }
+        return {handle,name,place,likes,caption,comments,overlay:media,mediaUrl,avatar:handle ? (state.avatars[handle] || '') : '',bg:bgs[idx % bgs.length]};
       });
     }
 
@@ -306,7 +317,12 @@ export function mountPhoneUI(root) {
       const stories = parseStoryBlocks(raw);
       const posts = parseFeedBlocks(raw);
       if(stories.length) state.stories = stories;
-      if(posts.length){ state.posts = posts; state.user.posts = Math.max(state.user.posts, posts.length); }
+      if(posts.length){
+        state.posts = posts;
+        // Posts count = only the user's own posts. NPC posts don't bump it.
+        const userHandle = '@' + state.user.handle.replace(/^@/, '');
+        state.user.posts = posts.filter(p => p.handle === userHandle || p.handle === '@me').length;
+      }
 
       // Prefer new <kakao_chat> format; fall back to legacy <kkt_room>
       const kakao = parseKakaoChatBlocks(raw);
@@ -349,7 +365,11 @@ export function mountPhoneUI(root) {
       const wrap = $('#storiesRow');
       const progress = $('#storyProgress');
       if(!wrap || !progress) return;
-      wrap.innerHTML = state.stories.map((story,i)=>`<div class="story-pill" data-story="${i}"><div class="story-ring"><div class="avatar-core" data-avatar="${escapeHtml(story.avatar)}" data-fallback="${escapeHtml((story.name || story.handle).slice(0,2))}"></div></div><span>${escapeHtml((story.name || story.handle).replace('@','').slice(0,8))}</span></div>`).join('');
+      wrap.innerHTML = state.stories.map((story,i)=>{
+        const fallback = (story.name || story.handle || '').replace('@','').slice(0,2) || 'ST';
+        const label = (story.name || story.handle || '').replace('@','').slice(0,8);
+        return `<div class="story-pill" data-story="${i}"><div class="story-ring"><div class="avatar-core" data-avatar="${escapeHtml(story.avatar)}" data-fallback="${escapeHtml(fallback)}"></div></div><span>${escapeHtml(label)}</span></div>`;
+      }).join('');
       progress.innerHTML = state.stories.map((_,i)=>`<div class="story-progress"><div class="story-progress-fill" style="width:${i < state.currentStory ? 100 : i === state.currentStory ? 86 : 0}%"></div></div>`).join('');
       $$('#storiesRow [data-story]').forEach(el => el.addEventListener('click', () => { state.currentStory = Number(el.dataset.story); renderStoryViewer(); switchInsPanel('story'); }));
       $$('#storiesRow [data-avatar]').forEach(el => applyAvatar(el, el.dataset.avatar, el.dataset.fallback));
@@ -359,9 +379,15 @@ export function mountPhoneUI(root) {
       renderStories();
       const story = state.stories[state.currentStory] || state.stories[0];
       if(!story) return;
-      applyAvatar($('#storyAvatar'), story.avatar, (story.name || story.handle).slice(0,2));
-      $('#storyHandle').textContent = `${story.handle} · ${story.name}`;
-      $('#storyMeta').textContent = `${story.time} · 第 ${state.currentStory + 1}/${state.stories.length} 条`;
+      const sFallback = (story.name || story.handle || 'ST').replace('@','').slice(0,2);
+      applyAvatar($('#storyAvatar'), story.avatar, sFallback);
+      const handlePart = story.handle ? story.handle + (story.name ? ' · ' + story.name : '') : (story.name || '');
+      $('#storyHandle').textContent = handlePart;
+      const metaParts = [];
+      if(story.time) metaParts.push(story.time);
+      if(story.mood) metaParts.push(story.mood);
+      metaParts.push(`第 ${state.currentStory + 1}/${state.stories.length} 条`);
+      $('#storyMeta').textContent = metaParts.join(' · ');
       const canvas = $('#storyCanvas');
       canvas.style.setProperty('--story-bg', story.bg);
       if(story.mediaUrl){
@@ -409,7 +435,8 @@ export function mountPhoneUI(root) {
           const value = input.value.trim();
           if(!value) return;
           const div = document.createElement('div');
-          div.textContent = '@me：' + value;
+          const myHandle = '@' + state.user.handle.replace(/^@/, '');
+          div.textContent = myHandle + '：' + value;
           wrap.appendChild(div);
           input.value = '';
         };
@@ -642,8 +669,10 @@ export function mountPhoneUI(root) {
 
     function publishComposer(){
       const handle = '@' + state.user.handle.replace(/^@/, '');
-      const meta = $('#composerMeta').value.trim() || (state.composeMode === 'feed' ? '18:42 我的动态' : '23:41');
-      const media = $('#composerMedia').value.trim() || '[图 · 默认图片描述]';
+      const now = new Date();
+      const hhmm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      const meta = $('#composerMeta').value.trim() || hhmm;
+      const media = $('#composerMedia').value.trim() || '[图]';
       const mediaUrl = $('#composerMediaUrl').value.trim();
       const text = $('#composerText').value.trim();
       if(state.composeMode === 'story'){
@@ -658,8 +687,10 @@ export function mountPhoneUI(root) {
         renderStories(); renderStoryViewer(); closeComposer(); switchInsPanel('story');
       }else{
         const comments = $('#composerComments').value.split('\n').map(s => s.trim()).filter(Boolean);
-        const likes = parseLikes($('#composerLikes').value) || 0;
-        state.posts.unshift({handle,name:state.user.name,place:meta,likes,caption:text || '我的新动态。',comments,overlay:media,mediaUrl,avatar:state.user.avatar,bg:'radial-gradient(circle at 50% 16%, rgba(255,255,255,.16), transparent 18%), linear-gradient(160deg,#7c3aed,#ec4899 55%,#312e81)'});
+        const likesInput = parseLikes($('#composerLikes').value);
+        // No explicit number → 0 (the user's own post; 不需要伪造点赞数).
+        const likes = likesInput || 0;
+        state.posts.unshift({handle,name:state.user.name,place:meta,likes,caption:text,comments,overlay:media,mediaUrl,avatar:state.user.avatar,bg:'radial-gradient(circle at 50% 16%, rgba(255,255,255,.16), transparent 18%), linear-gradient(160deg,#7c3aed,#ec4899 55%,#312e81)'});
         state.user.posts += 1;
         renderFeed(); renderProfile(); closeComposer(); switchInsPanel('feed');
       }
