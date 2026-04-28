@@ -156,11 +156,134 @@ function getSettings() {
         console.error('[CUI Phone] mountPhoneUI failed:', e);
     }
 
-    // Open / close
-    const toggle = () => root.classList.toggle('cui-collapsed');
-    root.querySelector('#cui-phone-fab').onclick = toggle;
+    // ---- FAB drag + open-near-FAB positioning ----
+    const FAB_POS_KEY = 'cuiphone:fab_pos';
+    const fab = root.querySelector('#cui-phone-fab');
+    const shell = root.querySelector('.cui-phone-shell');
+
+    function loadFabPos() {
+        try {
+            const p = JSON.parse(localStorage.getItem(FAB_POS_KEY) || 'null');
+            if (p && typeof p.left === 'number' && typeof p.top === 'number') return p;
+        } catch (_) {}
+        return null;
+    }
+    function saveFabPos(left, top) {
+        try { localStorage.setItem(FAB_POS_KEY, JSON.stringify({ left, top })); } catch (_) {}
+    }
+    function clampFabPos(p) {
+        // Keep at least the FAB visible inside the viewport.
+        const fw = fab.offsetWidth || 52;
+        const fh = fab.offsetHeight || 52;
+        const left = Math.max(0, Math.min(window.innerWidth - fw, p.left));
+        const top = Math.max(0, Math.min(window.innerHeight - fh, p.top));
+        return { left, top };
+    }
+    function applyFabPos(p) {
+        if (!p) return;
+        fab.style.left = p.left + 'px';
+        fab.style.top = p.top + 'px';
+        fab.style.right = 'auto';
+        fab.style.bottom = 'auto';
+    }
+    function positionPhoneNearFab() {
+        // The phone-shell renders at PHONE_W x PHONE_H * --cui-scale.
+        // We anchor it to whichever corner of the viewport the FAB currently
+        // sits closest to — phone visually grows out from that corner.
+        const r = fab.getBoundingClientRect();
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const onRight = (r.left + r.width / 2) > vw / 2;
+        const onBottom = (r.top + r.height / 2) > vh / 2;
+
+        // Anchor to the FAB's nearest corner. The phone overlays the FAB
+        // (no gap) so 底部到 FAB 不会再有空隙.
+        if (onRight) {
+            shell.style.right = Math.max(0, vw - r.right) + 'px';
+            shell.style.left = 'auto';
+        } else {
+            shell.style.left = Math.max(0, r.left) + 'px';
+            shell.style.right = 'auto';
+        }
+        if (onBottom) {
+            shell.style.bottom = Math.max(0, vh - r.bottom) + 'px';
+            shell.style.top = 'auto';
+        } else {
+            shell.style.top = Math.max(0, r.top) + 'px';
+            shell.style.bottom = 'auto';
+        }
+        shell.style.transformOrigin = (onBottom ? 'bottom ' : 'top ') + (onRight ? 'right' : 'left');
+    }
+
+    // Restore stored FAB position (if any) on startup.
+    const savedFab = loadFabPos();
+    if (savedFab) applyFabPos(clampFabPos(savedFab));
+
+    // Pointer-based drag (works for mouse + touch + pen).
+    let dragging = false, didMove = false, sx = 0, sy = 0, ox = 0, oy = 0;
+    fab.addEventListener('pointerdown', (e) => {
+        // Left mouse button only; touch/pen always pass.
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        dragging = true;
+        didMove = false;
+        const rect = fab.getBoundingClientRect();
+        sx = e.clientX; sy = e.clientY;
+        ox = rect.left; oy = rect.top;
+        try { fab.setPointerCapture(e.pointerId); } catch (_) {}
+        fab.classList.add('dragging');
+    });
+    fab.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - sx, dy = e.clientY - sy;
+        if (!didMove && (Math.abs(dx) + Math.abs(dy) > 4)) didMove = true;
+        if (!didMove) return;
+        const fw = fab.offsetWidth || 52;
+        const fh = fab.offsetHeight || 52;
+        const nx = Math.max(0, Math.min(window.innerWidth - fw, ox + dx));
+        const ny = Math.max(0, Math.min(window.innerHeight - fh, oy + dy));
+        fab.style.left = nx + 'px';
+        fab.style.top = ny + 'px';
+        fab.style.right = 'auto';
+        fab.style.bottom = 'auto';
+    });
+    function endDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        fab.classList.remove('dragging');
+        if (didMove) {
+            const rect = fab.getBoundingClientRect();
+            saveFabPos(rect.left, rect.top);
+        }
+        try { if (e && e.pointerId != null) fab.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    fab.addEventListener('pointerup', endDrag);
+    fab.addEventListener('pointercancel', endDrag);
+
+    // Open / close. After a drag, swallow the click so the phone doesn't toggle.
+    const toggle = () => {
+        if (root.classList.contains('cui-collapsed')) {
+            positionPhoneNearFab();
+            root.classList.remove('cui-collapsed');
+        } else {
+            root.classList.add('cui-collapsed');
+        }
+    };
+    fab.addEventListener('click', (e) => {
+        if (didMove) { e.preventDefault(); e.stopPropagation(); didMove = false; return; }
+        toggle();
+    });
     root.querySelector('#cui-phone-close').onclick = () => root.classList.add('cui-collapsed');
-    if (!settings.startCollapsed) root.classList.remove('cui-collapsed');
+
+    // Re-clamp FAB on viewport resize so it never escapes off-screen.
+    window.addEventListener('resize', () => {
+        const cur = loadFabPos();
+        if (cur) applyFabPos(clampFabPos(cur));
+        if (!root.classList.contains('cui-collapsed')) positionPhoneNearFab();
+    });
+
+    if (!settings.startCollapsed) {
+        positionPhoneNearFab();
+        root.classList.remove('cui-collapsed');
+    }
 
     // ---- Auto-fit + user-adjustable scale ----
     // Native phone-shell size is 390 x 844. We must fit it inside
@@ -176,8 +299,10 @@ function getSettings() {
     } catch(_){}
 
     function recomputeScale() {
+        // Phone is open in place of the FAB now, so the height budget is the
+        // entire viewport minus a small safety margin.
         const fitW = (window.innerWidth - 32) / PHONE_W;
-        const fitH = (window.innerHeight - 96) / PHONE_H;
+        const fitH = (window.innerHeight - 32) / PHONE_H;
         const fit = Math.min(1, fitW, fitH);   // never enlarge past native size
         const final = Math.max(0.4, fit * userScale);
         root.style.setProperty('--cui-scale', final.toFixed(3));

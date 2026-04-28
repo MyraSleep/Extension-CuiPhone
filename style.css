@@ -1,21 +1,28 @@
 /* =====================================================================
  * CUI Phone — outer container styles
- * v3 layout: simple absolute positioning, no flex squeezing.
- * The phone-shell (defined in phone-inner.css at ~390x844) is rendered
- * as-is; we just translate it via transform on small screens.
+ * v4: Draggable FAB. Phone-shell pops out anchored to the FAB position.
+ * The FAB is hidden while the phone is open; clicking ✕ restores it.
  * ===================================================================== */
 
 #cui-phone-root {
     position: fixed;
+    /* JS sets left/top at runtime. Initial fallback = right-bottom corner. */
     right: 16px;
     bottom: 16px;
     bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     z-index: 9998;
+    width: 0;          /* root is just a positioning anchor; children are fixed */
+    height: 0;
     font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-/* ---- Floating action button ---- */
+/* ---- Floating action button — DRAGGABLE ---- */
 #cui-phone-root .cui-phone-fab {
+    position: fixed;
+    /* JS sets left/top at runtime. Initial fallback hugs root's anchor. */
+    right: 16px;
+    bottom: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     width: 52px;
     height: 52px;
     border-radius: 50%;
@@ -23,30 +30,38 @@
     background: linear-gradient(135deg, #0a84ff, #6228d7);
     color: #fff;
     font-size: 22px;
-    cursor: pointer;
+    cursor: grab;
     box-shadow: 0 12px 32px rgba(15, 23, 42, 0.35);
     display: grid;
     place-items: center;
+    z-index: 9999;
     -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
+    touch-action: none;        /* let JS handle drag without browser scrolling */
+    user-select: none;
 }
-#cui-phone-root .cui-phone-fab:hover { transform: scale(1.06); }
-#cui-phone-root .cui-phone-fab:active { transform: scale(0.96); }
+#cui-phone-root .cui-phone-fab:active { cursor: grabbing; }
+#cui-phone-root .cui-phone-fab.dragging { transform: scale(1.08); }
 
-/* ---- Phone container — fixed-positioned, anchored to viewport bottom-right ----
- * KEY: use position:fixed (not absolute under #cui-phone-root) so we anchor
- * to the viewport, not to the small FAB-only root. The phone-shell inside
- * keeps its native 390x844 size; we transform-scale the wrapper to fit.
+/* When phone is open, hide the FAB so phone takes the same anchor slot. */
+#cui-phone-root:not(.cui-collapsed) .cui-phone-fab { display: none; }
+
+/* ---- Phone container ----
+ * JS positions this via inline left/top anchored to the FAB's last position.
+ * Native size is 390x844; --cui-scale (computed from viewport + user pref)
+ * scales the wrapper. transform-origin is set by JS based on FAB corner.
  */
 #cui-phone-root .cui-phone-shell {
     position: fixed;
+    /* JS sets left/top each time the phone is opened. */
     right: 16px;
-    bottom: 80px;        /* sit above the FAB */
+    bottom: 16px;
     width: 390px;
     height: 844px;
     background: transparent;
     pointer-events: auto;
     z-index: 9998;
+    transform: scale(var(--cui-scale, 1));
+    transform-origin: bottom right;   /* JS overrides per-corner */
 }
 #cui-phone-root.cui-collapsed .cui-phone-shell { display: none; }
 
@@ -56,7 +71,7 @@
     position: relative;
 }
 
-/* ---- Close button ---- */
+/* ---- Close button on the phone ---- */
 #cui-phone-root .cui-phone-close {
     position: absolute;
     top: -10px;
@@ -78,28 +93,6 @@
     touch-action: manipulation;
 }
 #cui-phone-root .cui-phone-close:hover { background: #0f172a; }
-
-/* ---- User-adjustable scale via CSS variable ----
- * --cui-scale is computed at runtime by index.js based on viewport size,
- * with a user-controlled multiplier on top. transform-origin is
- * bottom-right so the phone stays anchored to the FAB area when scaled.
- */
-#cui-phone-root .cui-phone-shell {
-    transform: scale(var(--cui-scale, 1));
-    transform-origin: bottom right;
-}
-
-@media (max-width: 480px) {
-    #cui-phone-root {
-        right: 8px;
-        bottom: 8px;
-        bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-    }
-    #cui-phone-root .cui-phone-shell {
-        right: 8px;
-        bottom: 70px;
-    }
-}
 
 /* ---- iOS auto-zoom guard ---- */
 #cui-phone-root input,
