@@ -416,6 +416,13 @@ function getSettings() {
         const fit = Math.min(1.3, fitW, fitH);
         const final = Math.max(0.4, fit * userScale);
         root.style.setProperty('--cui-scale', final.toFixed(3));
+        // CRITICAL: shell's transform is set as a literal string by
+        // positionPhoneNearFab (translate + scale baked together). Changing
+        // --cui-scale alone won't update it. So if the phone is open, we
+        // re-run the positioner so the visible scale tracks Ctrl+wheel live.
+        if (!root.classList.contains('cui-collapsed')) {
+            positionPhoneNearFab();
+        }
     }
     recomputeScale();
 
