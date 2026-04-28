@@ -1,0 +1,213 @@
+  <section class="phone-shell">
+    <div class="dynamic-island"></div>
+    <div class="screen">
+      <div class="wallpaper"></div>
+      <div class="statusbar"><span id="statusTime"></span><div class="status-right"><span>LTE</span><span>87%</span><div class="battery"><div class="battery-fill"></div></div></div></div>
+
+      <section class="view lock-view active" data-view="lock">
+        <div class="lock-top"><div class="lock-date" id="lockDate"></div><div class="lock-time" id="lockTime"></div></div>
+        <div class="notif-stack">
+          <div class="notif-card"><div class="notif-head"><span>Instagram</span><span>现在</span></div><div class="notif-title">Following 有新动态</div><div class="notif-copy">点击解锁后可以直接进 Feed，看 Story、主页和导入后的角色内容。</div></div>
+          <div class="notif-card"><div class="notif-head"><span>KakaoTalk</span><span>2 分钟前</span></div><div class="notif-title">崔宗秀：看完消息回我。</div><div class="notif-copy">KKT 保留独立聊天室、通话壳和可改名头像，并支持 ST 本地文本注入。</div></div>
+        </div>
+        <div class="unlock-hint">点击任意位置解锁</div>
+      </section>
+
+      <section class="view home-view" data-view="home">
+        <div class="home-layout">
+          <div>
+            <div class="home-head">
+              <div><div class="home-title">Cui Phone</div><div class="home-sub">ST local preview · 干净重写版</div></div>
+              <div style="font-size:.76rem;color:rgba(255,255,255,.82)">第 1 页</div>
+            </div>
+            <div class="icon-grid">
+              <div class="app-slot"><button class="app-button" data-open-app="ins"><div class="icon-tile ins"></div><div class="icon-label">Instagram</div></button></div>
+              <div class="app-slot"><button class="app-button" data-open-app="kkt"><div class="icon-tile kkt">K</div><div class="icon-label">KakaoTalk</div></button></div>
+              <div class="app-slot"><button class="app-button" data-open-app="st"><div class="icon-tile memo">ST</div><div class="icon-label">导入</div></button></div>
+            </div>
+          </div>
+          <div class="dock">
+            <button class="app-button" data-open-app="kkt"><div class="icon-tile kkt">K</div></button>
+            <button class="app-button" data-open-app="ins"><div class="icon-tile ins"></div></button>
+            <button class="app-button" data-open-app="st"><div class="icon-tile memo">ST</div></button>
+            <button class="app-button"><div class="icon-tile memo"></div></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view app-view" data-view="ins">
+        <header class="app-topbar">
+          <div class="app-left"><button class="nav-btn" data-home>‹</button><div><div class="app-title">Instagram</div><div class="app-subline" id="insSubline">Following feed</div></div></div>
+          <div class="app-right"><button class="icon-circle" id="openComposerBtn">＋</button></div>
+        </header>
+        <section class="panel active" data-ins-panel="feed">
+          <div class="stories-row" id="storiesRow"></div>
+          <div class="feed-list" id="feedList"></div>
+        </section>
+        <section class="panel story-panel" data-ins-panel="story">
+          <div class="story-view">
+            <div class="story-progress-wrap" id="storyProgress"></div>
+            <div class="story-head">
+              <div class="story-user"><div class="story-ring"><div class="avatar-core" id="storyAvatar"></div></div><div><div class="story-name" id="storyHandle"></div><div class="story-time" id="storyMeta"></div></div></div>
+              <div style="font-size:.78rem;color:rgba(255,255,255,.76)">轻点右侧或左滑切换</div>
+            </div>
+            <div class="story-canvas" id="storyCanvas"><div class="story-chips" id="storyChips"></div></div>
+            <div class="story-reply"><input id="storyReplyInput" placeholder="回复这条 Story" /><button class="icon-circle" id="storyLikeBtn">♡</button><button class="story-send" id="storySendBtn">发送</button></div>
+          </div>
+        </section>
+        <section class="panel profile-panel" data-ins-panel="profile">
+          <div class="profile-header">
+            <div class="profile-main">
+              <div class="profile-avatar"><div class="avatar-core" id="userAvatarMain">ME</div></div>
+              <div>
+                <div style="font-size:1rem;font-weight:800" id="userHandleText">@my.archive</div>
+                <div class="profile-stats">
+                  <div><div class="stat-num" id="userPostsCount">9</div><div class="stat-label">帖子</div></div>
+                  <div><div class="stat-num" id="userFollowersCount">312</div><div class="stat-label">粉丝</div></div>
+                  <div><div class="stat-num" id="userFollowingCount">187</div><div class="stat-label">关注</div></div>
+                </div>
+              </div>
+            </div>
+            <div class="profile-bio"><div style="font-weight:800" id="userNameText">你的名字</div><div id="userBioText">这是用户主页，可自定义。角色动态在 Feed 里看。</div><div class="profile-link" id="userLinkText">your-link.example</div></div>
+          </div>
+          <div class="highlight-row" id="highlightRow"></div>
+          <div class="profile-tools"><div class="tool-row"><button class="tool-btn primary" id="openProfileEditBtn">编辑主页</button><button class="tool-btn secondary" id="openImportBtn">导入 ST 文本</button></div></div>
+          <div class="editor-box collapsed" id="avatarEditor">
+            <div class="editor-title">头像更换</div>
+            <div class="avatar-preview-row">
+              <div class="avatar-card"><div class="tiny-label">你的头像</div><div class="avatar-core" id="userAvatarPreview">ME</div></div>
+              <div class="avatar-card"><div class="tiny-label">角色头像</div><div class="avatar-core" id="characterAvatarPreview">CZ</div></div>
+            </div>
+            <div class="avatar-grid"><input class="text-input" id="userAvatarInput" placeholder="你的头像 URL" /><input class="text-input" id="characterAvatarInput" placeholder="主角色头像 URL" /></div>
+            <textarea class="text-area" id="avatarMapInput" placeholder="@jungsoo_23=https://...&#10;@byeongchan_21=https://..."></textarea>
+            <div class="tool-row"><button class="tool-btn secondary" id="applyAvatarBtn">应用头像</button><span class="save-hint" id="avatarHint">修改后会同步到 Story、Feed、主页与 KKT。</span></div>
+          </div>
+          <div class="editor-box collapsed" id="profileEditor">
+            <div class="editor-title">自定义主页</div>
+            <input class="text-input" id="editHandle" placeholder="my.archive" />
+            <input class="text-input" id="editName" placeholder="你的名字" />
+            <input class="text-input" id="editBio" placeholder="简介" />
+            <input class="text-input" id="editLink" placeholder="链接" />
+            <input class="text-input" id="editHighlights" placeholder="高光，逗号分隔" />
+            <textarea class="text-area" id="editGridCaptions" placeholder="九宫格文案，逗号分隔"></textarea>
+            <div class="tool-row"><button class="tool-btn secondary" id="cancelProfileEditBtn">取消</button><button class="tool-btn primary" id="saveProfileBtn">保存主页</button></div>
+          </div>
+          <div class="profile-grid-head"><span>帖子</span><span style="color:#94a3b8;font-weight:600">3 × 3</span></div>
+          <div class="profile-grid" id="profileGrid"></div>
+        </section>
+        <section class="composer" id="composerPanel">
+          <div class="composer-wrap">
+            <div class="composer-title">发布你的 Instagram 内容</div>
+            <div class="composer-tabs"><button class="composer-tab active" data-compose="feed">发 Feed</button><button class="composer-tab" data-compose="story">发 Story</button></div>
+            <input class="text-input" id="composerMeta" placeholder="Feed：18:42 Busan / Story：23:41" />
+            <input class="text-input" id="composerMedia" placeholder="图片描述 / 音乐 / 贴纸说明" />
+            <input class="text-input" id="composerMediaUrl" placeholder="图片 URL，可直接贴 ST 输出链接" />
+            <input class="text-input" id="composerLikes" placeholder="Feed 点赞数，如 1,245" />
+            <textarea class="text-area" id="composerText" placeholder="正文内容"></textarea>
+            <textarea class="text-area" id="composerComments" placeholder="Feed 评论，每行一条"></textarea>
+            <div class="composer-note">这版保留 ST 友好文本结构：你可以直接粘贴角色卡 / 世界书生成的内容，或者用下面的导入面板批量注入。</div>
+            <div class="tool-row"><button class="tool-btn secondary" id="closeComposerBtn">关闭</button><button class="tool-btn primary" id="publishComposerBtn">发布</button></div>
+          </div>
+        </section>
+        <div class="ins-tabs"><button class="ins-tab active" data-ins-tab="feed">首页</button><button class="ins-tab" data-ins-tab="story">Story</button><button class="ins-tab" data-ins-tab="profile">我的</button></div>
+      </section>
+
+      <section class="view app-view" data-view="kkt">
+        <header class="app-topbar">
+          <div class="app-left"><button class="nav-btn" data-home>‹</button><div><div class="app-title">KakaoTalk</div><div class="app-subline" id="kktSubline">Chats</div></div></div>
+          <div class="app-right"><button class="icon-circle" id="openImportBtnTop">ST</button></div>
+        </header>
+        <section class="panel active" data-kkt-panel="list"><div class="kkt-list" id="chatList"></div></section>
+        <section class="panel" data-kkt-panel="chat">
+          <div class="kkt-chat">
+            <div class="kkt-hero"><div class="kkt-hero-avatar avatar-core" id="roomAvatar">KT</div><div><div class="kkt-hero-name" id="roomName">KakaoTalk</div><div class="kkt-hero-sub" id="roomSub">单聊</div></div><button class="kkt-hero-btn" id="editRoomBtn">✎</button><button class="kkt-hero-btn" id="callRoomBtn">☎</button></div>
+            <div class="thread" id="thread"></div>
+            <div class="inputbar"><button class="plus-btn" id="openEmojiSheetBtn">＋</button><div class="input-shell"><input id="kktInput" placeholder="输入消息" /></div><button class="send-btn" id="sendKktBtn">发送</button></div>
+          </div>
+        </section>
+        <section class="sheet collapsed" id="roomEditorSheet">
+          <div class="sheet-handle"></div>
+          <div class="sheet-card">
+            <div class="sheet-title">修改当前聊天室</div>
+            <div class="sheet-sub">这里只改当前 KKT 房间名称与头像，不影响 INS 主页。也可以继续用 ST 批量导入消息。</div>
+            <div class="sheet-row"><input class="sheet-input" id="roomNameInput" placeholder="聊天室名称" /><input class="sheet-input" id="roomAvatarInput" placeholder="头像 URL，可留空" /></div>
+            <div class="sheet-actions"><button class="tool-btn secondary" id="cancelRoomEditBtn">取消</button><button class="tool-btn primary" id="saveRoomEditBtn">保存</button></div>
+          </div>
+        </section>
+        <section class="sheet collapsed" id="emojiSheet">
+          <div class="sheet-handle"></div>
+          <div class="sheet-card">
+            <div class="sheet-title">表情与贴纸</div>
+            <div class="sheet-sub">这里改成 KKT 聊天附加功能，不再和 ST 导入重复。</div>
+            <div class="emoji-sheet">
+              <button class="emoji-btn">🙂</button><button class="emoji-btn">🥺</button><button class="emoji-btn">😶</button><button class="emoji-btn">😑</button><button class="emoji-btn">😭</button><button class="emoji-btn">❤️</button>
+            </div>
+            <div class="sticker-list">
+              <button class="sticker-btn">已读。
+(贴纸)</button>
+              <button class="sticker-btn">现在回。
+(贴纸)</button>
+              <button class="sticker-btn">忙完说。
+(贴纸)</button>
+              <button class="sticker-btn">收到。
+(贴纸)</button>
+            </div>
+            <div class="tool-row"><button class="tool-btn secondary" id="closeEmojiSheetBtn">关闭</button></div>
+          </div>
+        </section>
+        <section class="call-screen" id="callScreen">
+          <div class="call-shell">
+            <div class="call-top"><div class="call-avatar avatar-core" id="callAvatar">KT</div><div class="call-name" id="callName">崔宗秀</div><div class="call-state" id="callState">连接中</div><div class="call-dots"><span class="active"></span><span></span><span></span></div><div class="call-note">手机壳内保留了通话视图，方便你与 KKT 聊天流程联动演出。</div></div>
+            <div class="call-actions"><div class="call-action" id="muteCallBtn"><div class="circle">麦</div><span>静音</span></div><div class="call-action" id="speakerCallBtn"><div class="circle">扬</div><span>扬声器</span></div><div class="call-action end" id="endCallBtn"><div class="circle">断</div><span>挂断</span></div><div class="call-action" id="backCallBtn"><div class="circle">返</div><span>返回聊天</span></div></div>
+          </div>
+        </section>
+      </section>
+
+      <section class="view app-view" data-view="st">
+        <header class="app-topbar">
+          <div class="app-left"><button class="nav-btn" data-home>‹</button><div><div class="app-title">ST 导入台</div><div class="app-subline">本地预览，不依赖后端</div></div></div>
+          <div class="app-right"><button class="icon-circle" id="applyImportBtnTop">✓</button></div>
+        </header>
+        <section class="panel active" style="bottom:0;padding:16px;background:#fff;display:block">
+          <div class="editor-box" style="border:none;padding:0;background:transparent">
+            <div class="editor-title">导入说明</div>
+            <div style="font-size:.8rem;line-height:1.7;color:#64748b">可把 SillyTavern 变量替换后的文本直接粘贴进来，点击应用后会本地解析到 INS Story、INS Feed、KKT 聊天和角色主页。支持你继续在角色卡 / 世界书里拼接这些块。</div>
+            <textarea class="text-area" id="stImportText" style="min-height:250px" placeholder="支持格式：&#10;&#10;<user_profile>...&#10;<ins_story>...&#10;</ins_story>&#10;<ins_feed>...&#10;</ins_feed>&#10;<kkt_room id=&quot;choi&quot; name=&quot;崔宗秀&quot;>...&#10;</kkt_room>&#10;&#10;也支持单独贴其中一段。"></textarea>
+            <div class="tool-row"><button class="tool-btn secondary" id="resetImportBtn">恢复默认</button><button class="tool-btn primary" id="applyImportBtn">应用导入</button></div>
+            <div class="editor-title">推荐 ST 输出块</div>
+            <textarea class="text-area" readonly style="min-height:260px"><user_profile>
+handle=my.archive
+name=你的名字
+bio=这是用户主页，可自定义。
+link=your-link.example
+highlights=工作,片场,夜景,随手拍
+grid=archive,late,busan,notes,daily,mirror,blue,night,off
+</user_profile>
+
+<ins_story>
+@jungsoo_23 · 崔宗秀 | 23:41
+[图 · ONE MORE 片段]
+[音乐 · Agust D - The Last]
+story 字幕：先看完，再回来找我。
+</ins_story>
+
+<ins_feed>
+@jungsoo_23 · 崔宗秀 | 18:42 Busan
+[图 · MVP 结束后的后台照]
+❤️ 2,105
+回头看。
+@me：你这张像海报。
+</ins_feed>
+
+<kkt_room id="choi" name="崔宗秀">
+other|22:14|你醒了再回。
+me|22:15|刚看到。
+other|22:16|INS 那边也记得更新。
+</kkt_room></textarea>
+          </div>
+        </section>
+      </section>
+
+      <div class="home-indicator"></div>
+    </div>
+  </section>

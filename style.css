@@ -1,0 +1,94 @@
+/* =====================================================================
+ * CUI Phone — outer container styles (extension-level only)
+ * Inner phone UI styles live in phone-inner.css and are scoped under
+ * #cui-phone-root to prevent any leakage into SillyTavern's main UI.
+ * ===================================================================== */
+
+#cui-phone-root {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 9998;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+#cui-phone-root .cui-phone-fab {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #0a84ff, #6228d7);
+    color: #fff;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.35);
+    display: grid;
+    place-items: center;
+    transition: transform .15s ease;
+}
+#cui-phone-root .cui-phone-fab:hover { transform: scale(1.06); }
+
+#cui-phone-root .cui-phone-panel {
+    position: absolute;
+    right: 0;
+    bottom: 64px;
+    width: 412px;
+    max-height: 86vh;
+    background: rgba(20, 24, 32, 0.96);
+    border-radius: 24px;
+    box-shadow: 0 25px 70px rgba(15, 23, 42, .55);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    backdrop-filter: blur(8px);
+}
+
+#cui-phone-root.cui-collapsed .cui-phone-panel {
+    display: none;
+}
+
+#cui-phone-root .cui-phone-handle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    color: #e5e7eb;
+    font-size: 13px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    user-select: none;
+    cursor: move;
+}
+
+#cui-phone-root .cui-phone-handle button {
+    background: transparent;
+    border: none;
+    color: #cbd5e1;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+#cui-phone-root .cui-phone-handle button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+#cui-phone-root .cui-phone-mount {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 14px;
+    /* gradient background that the phone-shell expects from the original body */
+    background: linear-gradient(180deg, #eef3fa 0%, #dce5f0 100%);
+    display: grid;
+    place-items: center;
+}
+
+/* Slightly shrink the phone so it fits comfortably in the panel */
+#cui-phone-root .cui-phone-mount .phone-shell {
+    transform: scale(0.92);
+    transform-origin: top center;
+    margin-bottom: -40px; /* compensate for transform shrink */
+}
