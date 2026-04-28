@@ -25,6 +25,38 @@ export function mountPhoneUI(root) {
 
     const defaultImportText = '';
 
+    // ---- Persistent storage for user profile (Plan A: global, shared across characters) ----
+    // ONLY user.* fields and sticker base are persisted. posts / stories / rooms / threads
+    // are intentionally NOT stored here, so per-character INS/Kakao content stays isolated.
+    const STORAGE_KEY = 'cuiphone:user_profile_v1';
+    const STORAGE_KEY_STICKER = 'cuiphone:sticker_base_v1';
+    const DEFAULT_USER = {handle:'me',name:'未设置',bio:'在世界书里加 <user_profile> 设置你的账号，或在主页点击“编辑主页”。',link:'',avatar:'',posts:0,followers:0,following:0,highlights:[],grid:[]};
+    function loadPersistedUser(){
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return null;
+        const obj = JSON.parse(raw);
+        if(obj && typeof obj === 'object') return obj;
+      } catch(_){}
+      return null;
+    }
+    function persistUser(){
+      try {
+        const u = state.user;
+        const slim = {handle:u.handle,name:u.name,bio:u.bio,link:u.link,avatar:u.avatar,followers:u.followers,following:u.following,highlights:u.highlights,grid:u.grid};
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+      } catch(_){}
+    }
+    function loadPersistedStickerBase(){
+      try { return localStorage.getItem(STORAGE_KEY_STICKER) || ''; } catch(_) { return ''; }
+    }
+    function persistStickerBase(){
+      try { localStorage.setItem(STORAGE_KEY_STICKER, _stickerBase || ''); } catch(_){}
+    }
+    function clearPersistedUser(){
+      try { localStorage.removeItem(STORAGE_KEY); } catch(_){}
+    }
+
     const $ = s => root.querySelector(s);
     const $$ = s => Array.from(root.querySelectorAll(s));
     const escapeHtml = str => String(str ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -105,7 +137,7 @@ export function mountPhoneUI(root) {
 
     function parseStickerBase(text){
       const m = String(text || '').match(/<sticker_base>\s*([\s\S]*?)\s*<\/sticker_base>/);
-      if(m){ _stickerBase = m[1].trim(); }
+      if(m){ _stickerBase = m[1].trim(); persistStickerBase(); }
     }
 
     function parseFeedBlocks(text){
@@ -314,6 +346,15 @@ export function mountPhoneUI(root) {
       parseUserProfile(raw);
       parseInsProfiles(raw);
       parseStickerBase(raw);
+      // Plan A: local user edits beat the worldbook. After parsing the worldbook,
+      // re-apply the persisted user profile so manual changes stick across character switches.
+      const persisted = loadPersistedUser();
+      if(persisted){
+        Object.assign(state.user, persisted);
+        if(persisted.avatar) state.avatars['@me'] = persisted.avatar;
+      }
+      const savedBase = loadPersistedStickerBase();
+      if(savedBase) _stickerBase = savedBase;
       const stories = parseStoryBlocks(raw);
       const posts = parseFeedBlocks(raw);
       if(stories.length) state.stories = stories;
@@ -714,6 +755,7 @@ export function mountPhoneUI(root) {
       state.stories = state.stories.map(story => ({...story, avatar: story.handle === '@' + state.user.handle ? state.user.avatar : (state.avatars[story.handle] || story.avatar)}));
       state.posts = state.posts.map(post => ({...post, avatar: post.handle === '@' + state.user.handle || post.handle === '@me' ? state.user.avatar : (state.avatars[post.handle] || post.avatar)}));
       renderStories(); renderStoryViewer(); renderFeed(); renderProfile(); renderChatList(); renderThread();
+      persistUser();
       $('#avatarHint').textContent = '修改后会同步到 Story、Feed、主页与 KKT。';
     }
 
@@ -739,6 +781,17 @@ export function mountPhoneUI(root) {
         return own ? {...post, handle:'@' + state.user.handle, name:state.user.name, avatar:state.user.avatar || post.avatar} : post;
       });
       renderStories(); renderStoryViewer(); renderFeed(); renderProfile(); closeProfileEditor();
+      persistUser();
+    }
+
+    function resetUserProfile(){
+      if(!confirm('重置 user 资料？下次刷新会从世界书 <user_profile> 重读。')) return;
+      clearPersistedUser();
+      Object.assign(state.user, JSON.parse(JSON.stringify(DEFAULT_USER)));
+      state.avatars['@me'] = '';
+      // Re-apply imported worldbook data so values come back from <user_profile>.
+      try { applyImport(state.defaultImport || ''); } catch(_){}
+      renderProfile(); closeProfileEditor();
     }
 
     function renderLockNotifs(){
@@ -842,6 +895,8 @@ export function mountPhoneUI(root) {
       $('#cancelProfileEditBtn').addEventListener('click', () => { closeProfileEditor(); renderProfile(); });
       $('#applyAvatarBtn').addEventListener('click', applyAvatarSettings);
       $('#saveProfileBtn').addEventListener('click', saveProfile);
+      const resetBtn = $('#resetProfileBtn');
+      if(resetBtn) resetBtn.addEventListener('click', resetUserProfile);
       $('#sendKktBtn').addEventListener('click', submitKkt);
       $('#kktInput').addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submitKkt(); } });
       $('#callRoomBtn').addEventListener('click', openCall);
@@ -868,16 +923,31 @@ export function mountPhoneUI(root) {
       $('#backCallBtn').addEventListener('click', () => closeCall(true));
     }
 
+    function applyPersistedUser(){
+      // Local user profile (Plan A) overrides whatever was just parsed from worldbook,
+      // so the user's manual edits stick across character switches and reloads.
+      const persisted = loadPersistedUser();
+      if(persisted){
+        Object.assign(state.user, persisted);
+        if(persisted.avatar) state.avatars['@me'] = persisted.avatar;
+      }
+      const savedBase = loadPersistedStickerBase();
+      if(savedBase) _stickerBase = savedBase;
+    }
+
     function init(){
       state.defaultImport = defaultImportText;
       $('#stImportText').value = defaultImportText;
+      // applyImport already merges persisted user state at the end.
       applyImport(defaultImportText);
+      applyPersistedUser();
       bindUI();
       updateClock();
       setInterval(updateClock, 1000);
       switchView('lock');
       switchInsPanel('feed');
       switchKktPanel('list');
+      try { renderProfile(); } catch(_){}
     }
 
 
@@ -933,7 +1003,7 @@ export function mountPhoneUI(root) {
       openPhonePanel:  () => document.getElementById('cui-phone-root')?.classList.remove('cui-collapsed'),
       closePhonePanel: () => document.getElementById('cui-phone-root')?.classList.add('cui-collapsed'),
       refreshFromST,
-      setStickerBase: (url) => { _stickerBase = String(url || '').trim(); refreshAll(); },
+      setStickerBase: (url) => { _stickerBase = String(url || '').trim(); persistStickerBase(); refreshAll(); },
       getStickerBase: () => _stickerBase,
       // sendToST() is injected by st-bridge.js
     };

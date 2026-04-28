@@ -34,7 +34,10 @@ function injectInnerCss() {
     document.head.appendChild(link);
 }
 
-/** Build the floating root + panel skeleton. */
+/** Build the floating root skeleton.
+ *  v2 layout: no outer panel/handle. Just FAB + a transparent shell that hosts
+ *  the phone UI directly, plus a tiny floating close button.
+ */
 function buildRoot() {
     if (document.getElementById('cui-phone-root')) {
         return document.getElementById('cui-phone-root');
@@ -44,40 +47,13 @@ function buildRoot() {
     root.className = 'cui-phone-root cui-collapsed';
     root.innerHTML = `
         <button class="cui-phone-fab" id="cui-phone-fab" title="Phone">📱</button>
-        <div class="cui-phone-panel">
-            <div class="cui-phone-handle" id="cui-phone-handle">
-                <span>📱 CUI Phone</span>
-                <button id="cui-phone-close" title="Close">✕</button>
-            </div>
+        <div class="cui-phone-shell">
+            <button class="cui-phone-close" id="cui-phone-close" title="Close">✕</button>
             <div class="cui-phone-mount" id="cui-phone-mount"></div>
         </div>
     `;
     document.body.appendChild(root);
     return root;
-}
-
-/** Make the panel draggable by its handle. */
-function makeDraggable(root) {
-    const handle = root.querySelector('#cui-phone-handle');
-    let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
-    handle.addEventListener('mousedown', e => {
-        if (e.target.tagName === 'BUTTON') return;
-        dragging = true;
-        sx = e.clientX; sy = e.clientY;
-        const rect = root.getBoundingClientRect();
-        ox = rect.left; oy = rect.top;
-        e.preventDefault();
-    });
-    window.addEventListener('mousemove', e => {
-        if (!dragging) return;
-        const nx = ox + (e.clientX - sx);
-        const ny = oy + (e.clientY - sy);
-        root.style.left = Math.max(0, nx) + 'px';
-        root.style.top = Math.max(0, ny) + 'px';
-        root.style.right = 'auto';
-        root.style.bottom = 'auto';
-    });
-    window.addEventListener('mouseup', () => { dragging = false; });
 }
 
 /** Try to register a /phone slash command across multiple ST API versions.
@@ -162,8 +138,6 @@ function getSettings() {
     root.querySelector('#cui-phone-fab').onclick = toggle;
     root.querySelector('#cui-phone-close').onclick = () => root.classList.add('cui-collapsed');
     if (!settings.startCollapsed) root.classList.remove('cui-collapsed');
-
-    makeDraggable(root);
 
     // Wire ST <-> phone (chat sync, send-back, events)
     try {
