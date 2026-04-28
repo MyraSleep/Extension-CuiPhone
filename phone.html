@@ -6,10 +6,7 @@
 
       <section class="view lock-view active" data-view="lock">
         <div class="lock-top"><div class="lock-date" id="lockDate"></div><div class="lock-time" id="lockTime"></div></div>
-        <div class="notif-stack">
-          <div class="notif-card"><div class="notif-head"><span>Instagram</span><span>现在</span></div><div class="notif-title">Following 有新动态</div><div class="notif-copy">点击解锁后可以直接进 Feed，看 Story、主页和导入后的角色内容。</div></div>
-          <div class="notif-card"><div class="notif-head"><span>KakaoTalk</span><span>2 分钟前</span></div><div class="notif-title">崔宗秀：看完消息回我。</div><div class="notif-copy">KKT 保留独立聊天室、通话壳和可改名头像，并支持 ST 本地文本注入。</div></div>
-        </div>
+        <div class="notif-stack" id="lockNotifStack"></div>
         <div class="unlock-hint">点击任意位置解锁</div>
       </section>
 
@@ -17,7 +14,7 @@
         <div class="home-layout">
           <div>
             <div class="home-head">
-              <div><div class="home-title">Cui Phone</div><div class="home-sub">ST local preview · 干净重写版</div></div>
+              <div><div class="home-title">Cui Phone</div></div>
               <div style="font-size:.76rem;color:rgba(255,255,255,.82)">第 1 页</div>
             </div>
             <div class="icon-grid">
@@ -157,7 +154,7 @@
         </section>
         <section class="call-screen" id="callScreen">
           <div class="call-shell">
-            <div class="call-top"><div class="call-avatar avatar-core" id="callAvatar">KT</div><div class="call-name" id="callName">崔宗秀</div><div class="call-state" id="callState">连接中</div><div class="call-dots"><span class="active"></span><span></span><span></span></div><div class="call-note">手机壳内保留了通话视图，方便你与 KKT 聊天流程联动演出。</div></div>
+            <div class="call-top"><div class="call-avatar avatar-core" id="callAvatar">KT</div><div class="call-name" id="callName">崔宗秀</div><div class="call-state" id="callState">连接中</div><div class="call-dots"><span class="active"></span><span></span><span></span></div></div>
             <div class="call-actions"><div class="call-action" id="muteCallBtn"><div class="circle">麦</div><span>静音</span></div><div class="call-action" id="speakerCallBtn"><div class="circle">扬</div><span>扬声器</span></div><div class="call-action end" id="endCallBtn"><div class="circle">断</div><span>挂断</span></div><div class="call-action" id="backCallBtn"><div class="circle">返</div><span>返回聊天</span></div></div>
           </div>
         </section>
@@ -165,45 +162,48 @@
 
       <section class="view app-view" data-view="st">
         <header class="app-topbar">
-          <div class="app-left"><button class="nav-btn" data-home>‹</button><div><div class="app-title">ST 导入台</div><div class="app-subline">本地预览，不依赖后端</div></div></div>
+          <div class="app-left"><button class="nav-btn" data-home>‹</button><div><div class="app-title">导入</div><div class="app-subline">手动贴一段世界书/正文调试用</div></div></div>
           <div class="app-right"><button class="icon-circle" id="applyImportBtnTop">✓</button></div>
         </header>
         <section class="panel active" style="bottom:0;padding:16px;background:#fff;display:block">
           <div class="editor-box" style="border:none;padding:0;background:transparent">
             <div class="editor-title">导入说明</div>
             <div style="font-size:.8rem;line-height:1.7;color:#64748b">可把 SillyTavern 变量替换后的文本直接粘贴进来，点击应用后会本地解析到 INS Story、INS Feed、KKT 聊天和角色主页。支持你继续在角色卡 / 世界书里拼接这些块。</div>
-            <textarea class="text-area" id="stImportText" style="min-height:250px" placeholder="支持格式：&#10;&#10;<user_profile>...&#10;<ins_story>...&#10;</ins_story>&#10;<ins_feed>...&#10;</ins_feed>&#10;<kkt_room id=&quot;choi&quot; name=&quot;崔宗秀&quot;>...&#10;</kkt_room>&#10;&#10;也支持单独贴其中一段。"></textarea>
+            <textarea class="text-area" id="stImportText" style="min-height:250px" placeholder="支持标签：<user_profile> <ins_profiles> <sticker_base> <ins_story> <ins_feed> <kakao_chat>&#10;正常用法：ST 会自动从聊天记录里提取，这里只是手动调试用。"></textarea>
             <div class="tool-row"><button class="tool-btn secondary" id="resetImportBtn">恢复默认</button><button class="tool-btn primary" id="applyImportBtn">应用导入</button></div>
-            <div class="editor-title">推荐 ST 输出块</div>
-            <textarea class="text-area" readonly style="min-height:260px"><user_profile>
-handle=my.archive
-name=你的名字
-bio=这是用户主页，可自定义。
-link=your-link.example
-highlights=工作,片场,夜景,随手拍
-grid=archive,late,busan,notes,daily,mirror,blue,night,off
-</user_profile>
+            <div class="editor-title">世界书可识别的标签</div>
+            <textarea class="text-area" readonly style="min-height:300px">&lt;sticker_base&gt;
+https://files.catbox.moe/
+&lt;/sticker_base&gt;
 
-<ins_story>
-@jungsoo_23 · 崔宗秀 | 23:41
-[图 · ONE MORE 片段]
-[音乐 · Agust D - The Last]
-story 字幕：先看完，再回来找我。
-</ins_story>
+&lt;ins_profiles&gt;
+@handle1=https://files.catbox.moe/xxxxxx.jpg
+@handle2=https://files.catbox.moe/yyyyyy.jpg
+&lt;/ins_profiles&gt;
 
-<ins_feed>
-@jungsoo_23 · 崔宗秀 | 18:42 Busan
-[图 · MVP 结束后的后台照]
+&lt;ins_story&gt;
+@handle1 · 名字 | HH:MM 氛围
+[图 · 描述]
+[音乐 · 曲名]
+story 字幕：...
+&lt;/ins_story&gt;
+
+&lt;ins_feed&gt;
+@handle1 · 名字 | 18:42 Busan
+[图 · 描述]
 ❤️ 2,105
-回头看。
-@me：你这张像海报。
-</ins_feed>
+正文/caption
+@评论者：评论
+&lt;/ins_feed&gt;
 
-<kkt_room id="choi" name="崔宗秀">
-other|22:14|你醒了再回。
-me|22:15|刚看到。
-other|22:16|INS 那边也记得更新。
-</kkt_room></textarea>
+&lt;kakao_chat&gt;
+[群] 群名        （可选，有 = 群聊，无 = 单聊）
+⚫ 最终数 | 22:12
+ᄀ 正文
+ᄀ &lt;bqb&gt;晚安 5brt1b.jpeg&lt;/bqb&gt;
+🟡 用户 | 22:13
+ᄀ 正文
+&lt;/kakao_chat&gt;</textarea>
           </div>
         </section>
       </section>

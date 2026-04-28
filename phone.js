@@ -9,33 +9,17 @@ export function mountPhoneUI(root) {
       currentKktPanel:'list',
       currentStory:0,
       storyStartX:0,
-      currentRoom:'choi',
+      currentRoom:'',
       composeMode:'feed',
       callTimer:null,
       callSeconds:0,
-      user:{handle:'my.archive',name:'你的名字',bio:'这是用户主页，可自定义。角色动态在 Feed 里看。',link:'your-link.example',avatar:'',posts:9,followers:312,following:187,highlights:['工作','片场','夜景','随手拍'],grid:['archive','late','busan','notes','daily','mirror','blue','night','off']},
-      avatars:{'@me':'','@jungsoo_23':'','@jongsoo_23':'','@byeongchan_21':'','@yjjeon_4':''},
+      user:{handle:'my.archive',name:'你的名字',bio:'这是用户主页，可自定义。角色动态在 Feed 里看。',link:'',avatar:'',posts:0,followers:0,following:0,highlights:[],grid:[]},
+      avatars:{'@me':''},
       stories:[],
       posts:[],
-      rooms:[
-        {id:'choi',name:'崔宗秀',avatar:'',preview:'看完消息回我。',time:'05:37',unread:1,kind:'单聊',read:false},
-        {id:'team',name:'工作群',avatar:'',preview:'7:10 集合，不要迟到。',time:'昨天',unread:3,kind:'7 人群聊',read:false}
-      ],
+      rooms:[],
       roomIdentity:{},
-      threads:{
-        choi:[
-          {side:'other',name:'崔宗秀',time:'22:14',text:'你醒了再回。'},
-          {side:'me',name:'me',time:'22:15',text:'刚看到。'},
-          {side:'other',name:'崔宗秀',time:'22:16',text:'INS 那边也记得更新。'},
-          {side:'other',name:'崔宗秀',time:'22:16',text:'Story 不要发完就跑。'},
-          {side:'me',name:'me',time:'22:17',text:'知道了。'}
-        ],
-        team:[
-          {side:'other',name:'工作群',time:'20:14',text:'7:10 集合。'},
-          {side:'other',name:'工作群',time:'20:14',text:'服装不要忘。'},
-          {side:'me',name:'me',time:'20:16',text:'收到。'}
-        ]
-      },
+      threads:{},
       defaultImport:''
     };
 
@@ -47,7 +31,8 @@ export function mountPhoneUI(root) {
     const isImageUrl = v => /^(https?:)?\/\//i.test(String(v || '').trim()) || /^data:image\//i.test(String(v || '').trim());
     const cssUrl = v => String(v || '').replace(/"/g,'\\"').replace(/\n/g,'');
     const likesText = n => `${Number(n || 0).toLocaleString('en-US')} likes`;
-    const roomById = id => state.rooms.find(r => r.id === id) || state.rooms[0];
+    const EMPTY_ROOM = {id:'',name:'',avatar:'',preview:'',time:'',unread:0,kind:'',read:true};
+    const roomById = id => state.rooms.find(r => r.id === id) || state.rooms[0] || EMPTY_ROOM;
 
     function applyAvatar(el, value, fallback){
       if(!el) return;
@@ -98,13 +83,36 @@ export function mountPhoneUI(root) {
           if(/^\[音乐/.test(line)){ chips.push({type:'music',text:line.replace(/^\[音乐\s*·?\s*/,'').replace(/\]$/,'')}); return; }
           chips.push({type:'text',text:line.replace(/^story\s*字幕[:：]?\s*/i,'')});
         });
+        if(!(handle in state.avatars)) state.avatars[handle] = '';
         return {handle,name,time,avatar:state.avatars[handle] || '',mediaUrl,bg:'radial-gradient(circle at 52% 18%, rgba(255,255,255,.18), transparent 22%), linear-gradient(160deg,#0f172a,#334155 52%,#475569)',chips};
       });
     }
 
+    function parseInsProfiles(text){
+      const m = String(text || '').match(/<ins_profiles>\s*([\s\S]*?)\s*<\/ins_profiles>/);
+      if(!m) return;
+      m[1].split('\n').map(s => s.trim()).filter(Boolean).forEach(line => {
+        const eq = line.indexOf('=');
+        if(eq < 0) return;
+        const key = line.slice(0, eq).trim();
+        const val = line.slice(eq + 1).trim();
+        if(!key.startsWith('@')) return;
+        state.avatars[key] = val;
+      });
+    }
+
+    function parseStickerBase(text){
+      const m = String(text || '').match(/<sticker_base>\s*([\s\S]*?)\s*<\/sticker_base>/);
+      if(m){ _stickerBase = m[1].trim(); }
+    }
+
     function parseFeedBlocks(text){
-      const match = String(text || '').match(/<ins_feed>\s*([\s\S]*?)\s*<\/ins_feed>/);
-      const inner = match ? match[1].trim() : String(text || '').trim();
+      // Only parse content INSIDE <ins_feed>...</ins_feed>. If no such block
+      // exists, return [] — never fall back to raw text (which would let
+      // <kakao_chat> blocks leak into the feed).
+      const matches = [...String(text || '').matchAll(/<ins_feed>\s*([\s\S]*?)\s*<\/ins_feed>/g)];
+      if (!matches.length) return [];
+      const inner = matches.map(m => m[1].trim()).join('\n\n');
       const groups = inner.split(/\n\s*\n(?=@)/).map(s => s.trim()).filter(Boolean);
       const bgs = [
         'radial-gradient(circle at 50% 18%, rgba(255,255,255,.18), transparent 22%), linear-gradient(160deg,#111827,#243447 52%,#0f172a)',
@@ -126,6 +134,7 @@ export function mountPhoneUI(root) {
         const handle = hm ? hm[1] : '@user';
         const name = hm ? hm[2] : '用户';
         const place = hm ? hm[3] : '00:00';
+        if(!(handle in state.avatars)) state.avatars[handle] = '';
         return {handle,name,place,likes,caption,comments,overlay:media,mediaUrl,avatar:state.avatars[handle] || '',bg:bgs[idx % bgs.length]};
       });
     }
@@ -173,38 +182,63 @@ export function mountPhoneUI(root) {
     }
 
     /**
-     * Parse <kakao_chat>...</kakao_chat> blocks per worldbook spec:
-     *   - Optional first line: group name like "[群聊] xxx" / "[KKT群] xxx"
-     *   - Repeating two-line message blocks:
-     *       "⚫ 角色名 | HH:MM"  + next line  "ᄀ 内容"     (other side)
-     *       "🟡 用户名 | HH:MM"  + next line  "ᄀ 内容"     (me)
-     *   - Sticker syntax inside content:  <bqb>描述 文件名.gif</bqb>
-     * Each <kakao_chat> block becomes ONE room. Multiple blocks => multiple rooms.
+     * Stable room id from a name (group name or 1v1 partner).
+     * Same name => same id => messages merge into the same room.
+     */
+    function roomIdFromName(name){
+      const s = String(name || '').trim();
+      if (!s) return 'kkt_default';
+      let h = 0;
+      for (let i = 0; i < s.length; i++) {
+          h = ((h << 5) - h) + s.charCodeAt(i);
+          h |= 0;
+      }
+      return 'kkt_' + Math.abs(h).toString(36);
+    }
+
+    /** Dedupe messages by (side, time, text) so two identical adjacent
+     *  blocks don't double messages. */
+    function dedupeMessages(arr){
+      const seen = new Set();
+      const out = [];
+      for (const m of arr) {
+        const key = `${m.side}|${m.time}|${m.text}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(m);
+      }
+      return out;
+    }
+
+    /**
+     * Parse <kakao_chat>...</kakao_chat> blocks per worldbook spec.
+     * Multiple blocks with the same group/partner are MERGED into one room
+     * (deduped). Different group/partner names produce different rooms.
      */
     function parseKakaoChatBlocks(text){
-      const out = [];
+      const byRoom = new Map(); // id -> {room, messages}
       const matches = [...String(text || '').matchAll(/<kakao_chat>\s*([\s\S]*?)\s*<\/kakao_chat>/g)];
-      matches.forEach((m, blockIdx) => {
-        const lines = m[1].split('\n').map(s => s.trim()).filter(Boolean);
-        if (!lines.length) return;
 
-        // Detect optional group-name header line
+      for (const m of matches) {
+        const lines = m[1].split('\n').map(s => s.trim()).filter(Boolean);
+        if (!lines.length) continue;
+
+        // Optional group-name header line (anything not starting with ⚫/🟡/ᄀ)
         let groupName = null;
-        if (lines[0] && !/^[⚫🟡ᄀ]/u.test(lines[0])) {
+        if (!/^[⚫🟡ᄀ]/u.test(lines[0])) {
           groupName = lines[0].replace(/^\s*\[(?:群聊|KKT群|群)\]\s*/, '').trim() || lines[0];
           lines.shift();
         }
 
-        const messages = [];
-        let primaryName = null; // first 1v1 partner becomes the room name fallback
+        const blockMessages = [];
+        let primaryName = null;
         for (let i = 0; i < lines.length; i++) {
           const head = lines[i];
-          const headMatch = head.match(/^([⚫🟡])\s*([^|]+?)\s*\|\s*(\d{1,2}:\d{2})\s*$/u);
-          if (!headMatch) continue;
-          const isMe = headMatch[1] === '🟡';
-          const speaker = headMatch[2].trim();
-          const time = headMatch[3];
-          // Find next "ᄀ" body line
+          const hm = head.match(/^([⚫🟡])\s*([^|]+?)\s*\|\s*(\d{1,2}:\d{2})\s*$/u);
+          if (!hm) continue;
+          const isMe = hm[1] === '🟡';
+          const speaker = hm[2].trim();
+          const time = hm[3];
           let body = '';
           for (let j = i + 1; j < lines.length; j++) {
             const b = lines[j];
@@ -214,7 +248,7 @@ export function mountPhoneUI(root) {
           }
           if (!body) continue;
           if (!isMe && !primaryName) primaryName = speaker;
-          messages.push({
+          blockMessages.push({
             side: isMe ? 'me' : 'other',
             name: isMe ? 'me' : speaker,
             time,
@@ -222,22 +256,44 @@ export function mountPhoneUI(root) {
           });
         }
 
-        if (!messages.length && !groupName) return;
+        if (!blockMessages.length && !groupName) continue;
 
-        const id = 'kkt_' + blockIdx;
-        const roomName = groupName || primaryName || '聊天室';
-        const room = {
-          id,
-          name: roomName,
-          avatar: '',
-          preview: messages.length ? messages[messages.length - 1].text.slice(0, 60) : '',
-          time: messages.length ? messages[messages.length - 1].time : '',
-          unread: messages.filter(x => x.side !== 'me').length,
-          kind: groupName ? '群聊' : '单聊',
-          read: false,
-        };
-        out.push({ room, messages });
-      });
+        // Decide which room these messages belong to.
+        const roomKey = groupName || primaryName || '聊天室';
+        const id = roomIdFromName(roomKey);
+        let entry = byRoom.get(id);
+        if (!entry) {
+          entry = {
+            room: {
+              id,
+              name: roomKey,
+              avatar: '',
+              preview: '',
+              time: '',
+              unread: 0,
+              kind: groupName ? '群聊' : '单聊',
+              read: false,
+            },
+            messages: [],
+          };
+          byRoom.set(id, entry);
+        }
+        // Append; dedupe handled below.
+        entry.messages.push(...blockMessages);
+      }
+
+      // Finalize each room: dedupe + recompute preview/time/unread.
+      const out = [];
+      for (const entry of byRoom.values()) {
+        entry.messages = dedupeMessages(entry.messages);
+        const last = entry.messages[entry.messages.length - 1];
+        if (last) {
+          entry.room.preview = last.text.slice(0, 60);
+          entry.room.time = last.time;
+        }
+        entry.room.unread = entry.messages.filter(x => x.side !== 'me').length;
+        out.push(entry);
+      }
       return out;
     }
 
@@ -245,6 +301,8 @@ export function mountPhoneUI(root) {
       const raw = String(text || '').trim();
       if(!raw) return;
       parseUserProfile(raw);
+      parseInsProfiles(raw);
+      parseStickerBase(raw);
       const stories = parseStoryBlocks(raw);
       const posts = parseFeedBlocks(raw);
       if(stories.length) state.stories = stories;
@@ -270,7 +328,6 @@ export function mountPhoneUI(root) {
       const saved = state.roomIdentity[room.id];
       if(saved?.avatar) return saved.avatar;
       if(room.avatar) return room.avatar;
-      if(room.id === 'choi') return state.avatars['@jungsoo_23'] || '';
       return '';
     }
 
@@ -371,10 +428,22 @@ export function mountPhoneUI(root) {
       $('#userFollowingCount').textContent = state.user.following;
       applyAvatar($('#userAvatarMain'), state.user.avatar, 'ME');
       applyAvatar($('#userAvatarPreview'), state.user.avatar, 'ME');
-      applyAvatar($('#characterAvatarPreview'), state.avatars['@jungsoo_23'], 'CZ');
+      // "主角色" = first discovered NPC handle (anything other than @me).
+      // This used to be hardcoded as @jungsoo_23; now it tracks whoever is
+      // actually present in the worldbook / parsed feed.
+      const npcHandles = Object.keys(state.avatars).filter(h => h !== '@me');
+      const mainHandle = npcHandles[0] || '';
+      applyAvatar($('#characterAvatarPreview'), mainHandle ? state.avatars[mainHandle] : '', mainHandle ? mainHandle.replace('@','').slice(0,2).toUpperCase() : 'NPC');
       $('#userAvatarInput').value = state.user.avatar || '';
-      $('#characterAvatarInput').value = state.avatars['@jungsoo_23'] || '';
+      const charInput = $('#characterAvatarInput');
+      charInput.value = mainHandle ? (state.avatars[mainHandle] || '') : '';
+      charInput.placeholder = mainHandle ? `${mainHandle} 的头像 URL` : '主角色头像 URL（先在 INS Feed/Story 出现 @handle 后才能识别）';
+      charInput.dataset.targetHandle = mainHandle;
+      // Avatar map enumerates ALL discovered handles dynamically.
       $('#avatarMapInput').value = Object.entries(state.avatars).map(([k,v]) => `${k}=${v}`).join('\n');
+      $('#avatarMapInput').placeholder = npcHandles.length
+        ? npcHandles.slice(0,3).map(h => `${h}=https://...`).join('\n')
+        : '@handle=https://...（每行一个，自动从世界书发现）';
       $('#editHandle').value = state.user.handle;
       $('#editName').value = state.user.name;
       $('#editBio').value = state.user.bio;
@@ -400,29 +469,100 @@ export function mountPhoneUI(root) {
     }
 
     /**
-     * Render a single bubble's content. Detects <bqb>desc filename.ext</bqb>
-     * stickers and renders them as a small sticker tile (text-only fallback,
-     * since we don't ship the image files).
+     * Sticker base URL. Override at runtime from settings or worldbook so
+     * actual sticker images can render without redeploying. Example:
+     *   window.CuiPhone.setStickerBase('https://yourcdn.example.com/stickers/');
+     */
+    // Default to catbox.moe so users who put `<bqb>desc xxxxxx.gif</bqb>`
+    // get pictures right away. Override with <sticker_base>...</sticker_base>
+    // in the worldbook or window.CuiPhone.setStickerBase('https://...').
+    let _stickerBase = 'https://files.catbox.moe/';
+
+    function renderSticker(inner){
+      const trimmed = String(inner || '').trim();
+      // 1) Full URL anywhere in the tag wins — pull out http(s) link first.
+      const urlMatch = trimmed.match(/(https?:\/\/\S+\.(?:png|jpe?g|gif|webp))/i);
+      let url = '';
+      let desc = '';
+      let file = '';
+      if (urlMatch) {
+        url = urlMatch[1];
+        desc = trimmed.replace(url, '').trim();
+      } else {
+        // 2) Trailing token that looks like "name.ext" — combine with base.
+        const fileMatch = trimmed.match(/(\S+\.(?:png|jpe?g|gif|webp))\s*$/i);
+        if (fileMatch) {
+          file = fileMatch[1];
+          desc = trimmed.slice(0, trimmed.length - file.length).trim();
+        } else {
+          // 3) Trailing bare catbox ID (6 chars, no extension) — assume .jpg
+          //    on catbox. Users can still override with explicit extension.
+          const idMatch = trimmed.match(/(?:^|\s)([a-z0-9]{6})\s*$/i);
+          if (idMatch && /catbox/i.test(_stickerBase)) {
+            file = idMatch[1] + '.jpg';
+            desc = trimmed.slice(0, trimmed.length - idMatch[1].length).trim();
+          } else {
+            desc = trimmed;
+          }
+        }
+        if (file && _stickerBase) {
+          url = _stickerBase.replace(/\/?$/, '/') + file;
+        }
+      }
+      if (url) {
+        return `<div class="sticker-bubble has-image" title="${escapeHtml(desc || file)}">`
+             + `<img class="sticker-img" src="${escapeHtml(url)}" alt="${escapeHtml(desc || file)}" `
+             + `onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />`
+             + `<div class="sticker-fallback" style="display:none">`
+             + `<div class="sticker-emoji">🎨</div>`
+             + `<div class="sticker-desc">${escapeHtml(desc || file || '贴纸')}</div>`
+             + `</div></div>`;
+      }
+      return `<div class="sticker-bubble" title="${escapeHtml(file)}">`
+           + `<div class="sticker-emoji">🎨</div>`
+           + `<div class="sticker-desc">${escapeHtml(desc || file || '贴纸')}</div>`
+           + `</div>`;
+    }
+
+    /**
+     * Render a single bubble's content.
+     *  - Detects <bqb>desc filename.ext</bqb> anywhere in the bubble (one
+     *    or many) and renders each as a sticker tile.
+     *  - Plain text outside the tags is HTML-escaped and kept inline.
      */
     function renderBubbleContent(text){
       const raw = String(text || '');
-      const m = raw.match(/^\s*<bqb>\s*([\s\S]*?)\s*<\/bqb>\s*$/);
-      if (m) {
-        const inner = m[1].trim();
-        // last whitespace-separated token that looks like a filename
-        const fileMatch = inner.match(/(\S+\.(?:png|jpe?g|gif|webp))\s*$/i);
-        const file = fileMatch ? fileMatch[1] : '';
-        const desc = file ? inner.slice(0, inner.length - file.length).trim() : inner;
-        return `<div class="sticker-bubble" title="${escapeHtml(file)}">`
-             + `<div class="sticker-emoji">🎨</div>`
-             + `<div class="sticker-desc">${escapeHtml(desc || file || '贴纸')}</div>`
-             + `</div>`;
+      if (!/<bqb>[\s\S]*?<\/bqb>/i.test(raw)) {
+        return escapeHtml(raw);
       }
-      return escapeHtml(raw);
+      const parts = [];
+      const re = /<bqb>([\s\S]*?)<\/bqb>/gi;
+      let last = 0;
+      let mm;
+      while ((mm = re.exec(raw)) !== null) {
+        if (mm.index > last) {
+          const seg = raw.slice(last, mm.index).trim();
+          if (seg) parts.push(escapeHtml(seg));
+        }
+        parts.push(renderSticker(mm[1]));
+        last = mm.index + mm[0].length;
+      }
+      if (last < raw.length) {
+        const seg = raw.slice(last).trim();
+        if (seg) parts.push(escapeHtml(seg));
+      }
+      return parts.join(' ');
     }
 
     function renderThread(){
       const room = roomById(state.currentRoom);
+      if(!room.id){
+        $('#roomName').textContent = '';
+        $('#roomSub').textContent = '';
+        applyAvatar($('#roomAvatar'), '', '');
+        $('#thread').innerHTML = '<div class="day-badge">暂无聊天，贴一段 &lt;kakao_chat&gt; 后会出现</div>';
+        return;
+      }
       const title = state.roomIdentity[room.id]?.name || room.name;
       $('#roomName').textContent = title;
       $('#roomSub').textContent = room.kind || '聊天';
@@ -437,7 +577,7 @@ export function mountPhoneUI(root) {
       $('#thread').scrollTop = $('#thread').scrollHeight;
     }
 
-    function openRoom(id){ state.currentRoom = id; const room = roomById(id); room.read = true; room.unread = 0; renderChatList(); renderThread(); switchKktPanel('chat'); }
+    function openRoom(id){ state.currentRoom = id; const room = roomById(id); if(room.id){ room.read = true; room.unread = 0; } renderChatList(); renderThread(); switchKktPanel('chat'); }
 
     function openCall(){
       const room = roomById(state.currentRoom);
@@ -531,8 +671,10 @@ export function mountPhoneUI(root) {
     function applyAvatarSettings(){
       state.user.avatar = $('#userAvatarInput').value.trim();
       state.avatars['@me'] = state.user.avatar;
-      state.avatars['@jungsoo_23'] = $('#characterAvatarInput').value.trim();
-      state.avatars['@jongsoo_23'] = state.avatars['@jungsoo_23'];
+      const charInput = $('#characterAvatarInput');
+      const charTarget = charInput.dataset.targetHandle || '';
+      const charValue = charInput.value.trim();
+      if(charTarget && charValue) state.avatars[charTarget] = charValue;
       $('#avatarMapInput').value.split('\n').map(s => s.trim()).filter(Boolean).forEach(line => {
         if(!line.includes('=')) return;
         const [key, value] = line.split('=');
@@ -568,6 +710,49 @@ export function mountPhoneUI(root) {
       renderStories(); renderStoryViewer(); renderFeed(); renderProfile(); closeProfileEditor();
     }
 
+    function renderLockNotifs(){
+      const stack = $('#lockNotifStack');
+      if(!stack) return;
+      const cards = [];
+
+      // Latest KKT message: scan all rooms, take last NPC message overall.
+      let latestKkt = null;
+      for(const room of state.rooms){
+        const thread = state.threads[room.id] || [];
+        for(let i = thread.length - 1; i >= 0; i--){
+          const m = thread[i];
+          if(m.side === 'me') continue;
+          if(!latestKkt || (m.time || '') >= (latestKkt.time || '')){
+            latestKkt = {room, msg: m};
+          }
+          break;
+        }
+      }
+      if(latestKkt){
+        const sender = latestKkt.room.kind && latestKkt.room.kind.includes('群')
+          ? `${latestKkt.room.name} · ${latestKkt.msg.name || ''}`.trim()
+          : (latestKkt.room.name || latestKkt.msg.name || '');
+        const preview = (latestKkt.msg.text || '').replace(/<bqb>[\s\S]*?<\/bqb>/gi, '[贴纸]').slice(0, 60);
+        cards.push(`<div class="notif-card"><div class="notif-head"><span>KakaoTalk</span><span>${escapeHtml(latestKkt.msg.time || '')}</span></div><div class="notif-title">${escapeHtml(sender)}</div><div class="notif-copy">${escapeHtml(preview)}</div></div>`);
+      }
+
+      // Latest INS post.
+      const latestPost = state.posts[0];
+      if(latestPost){
+        const preview = (latestPost.caption || latestPost.overlay || '').slice(0, 60);
+        cards.push(`<div class="notif-card"><div class="notif-head"><span>Instagram</span><span>${escapeHtml(latestPost.place || '')}</span></div><div class="notif-title">${escapeHtml(latestPost.handle)} · ${escapeHtml(latestPost.name || '')}</div><div class="notif-copy">${escapeHtml(preview)}</div></div>`);
+      }
+
+      // Latest Story.
+      const latestStory = state.stories[0];
+      if(latestStory && !latestPost){
+        const preview = (latestStory.chips.find(c => c.type === 'text')?.text || '').slice(0, 60);
+        cards.push(`<div class="notif-card"><div class="notif-head"><span>Instagram Story</span><span>${escapeHtml(latestStory.time || '')}</span></div><div class="notif-title">${escapeHtml(latestStory.handle)} · ${escapeHtml(latestStory.name || '')}</div><div class="notif-copy">${escapeHtml(preview)}</div></div>`);
+      }
+
+      stack.innerHTML = cards.join('') || '<div class="unlock-hint" style="opacity:.55">暂无通知</div>';
+    }
+
     function refreshAll(){
       renderStories();
       renderStoryViewer();
@@ -575,6 +760,7 @@ export function mountPhoneUI(root) {
       renderProfile();
       renderChatList();
       renderThread();
+      renderLockNotifs();
       $('#stImportText').value = state.defaultImport;
     }
 
@@ -716,6 +902,8 @@ export function mountPhoneUI(root) {
       openPhonePanel:  () => document.getElementById('cui-phone-root')?.classList.remove('cui-collapsed'),
       closePhonePanel: () => document.getElementById('cui-phone-root')?.classList.add('cui-collapsed'),
       refreshFromST,
+      setStickerBase: (url) => { _stickerBase = String(url || '').trim(); refreshAll(); },
+      getStickerBase: () => _stickerBase,
       // sendToST() is injected by st-bridge.js
     };
 
