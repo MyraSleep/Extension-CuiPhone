@@ -45,8 +45,12 @@ function buildRoot() {
     const root = document.createElement('div');
     root.id = 'cui-phone-root';
     root.className = 'cui-phone-root cui-collapsed';
+    // Inline fallback styles so the FAB is always visible even if style.css
+    // didn't load (e.g. cache miss, manifest css line ignored, etc.).
+    root.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:9998;';
     root.innerHTML = `
-        <button class="cui-phone-fab" id="cui-phone-fab" title="Phone">📱</button>
+        <button class="cui-phone-fab" id="cui-phone-fab" title="Phone"
+            style="width:52px;height:52px;border-radius:50%;border:none;background:linear-gradient(135deg,#0a84ff,#6228d7);color:#fff;font-size:22px;cursor:pointer;box-shadow:0 12px 32px rgba(15,23,42,.35);display:grid;place-items:center;">📱</button>
         <div class="cui-phone-shell">
             <button class="cui-phone-close" id="cui-phone-close" title="Close">✕</button>
             <div class="cui-phone-mount" id="cui-phone-mount"></div>

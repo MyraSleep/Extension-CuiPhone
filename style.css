@@ -13,7 +13,9 @@
 #cui-phone-root {
     position: fixed;
     right: 16px;
-    bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    bottom: 16px;
+    /* iOS safe-area: layered fallback so a missing env() never breaks bottom. */
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     z-index: 9998;
     font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
@@ -88,7 +90,8 @@
 @media (max-width: 480px) {
     #cui-phone-root {
         right: 8px;
-        bottom: max(8px, env(safe-area-inset-bottom, 8px));
+        bottom: 8px;
+        bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     }
     #cui-phone-root .cui-phone-shell {
         right: 0;
