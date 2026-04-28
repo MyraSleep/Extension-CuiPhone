@@ -66,10 +66,10 @@ function buildRoot() {
     root.className = 'cui-phone-root cui-collapsed';
     // Inline fallback styles so the FAB is always visible even if style.css
     // didn't load (e.g. cache miss, manifest css line ignored, etc.).
-    root.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:9998;';
+    root.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483600;pointer-events:none;';
     root.innerHTML = `
         <button class="cui-phone-fab" id="cui-phone-fab" title="Phone"
-            style="width:52px;height:52px;border-radius:50%;border:none;background:linear-gradient(135deg,#0a84ff,#6228d7);color:#fff;font-size:22px;cursor:pointer;box-shadow:0 12px 32px rgba(15,23,42,.35);display:grid;place-items:center;">📱</button>
+            style="position:fixed;right:16px;bottom:16px;width:52px;height:52px;border-radius:50%;border:none;background:linear-gradient(135deg,#0a84ff,#6228d7);color:#fff;font-size:22px;cursor:grab;box-shadow:0 12px 32px rgba(15,23,42,.35);display:grid;place-items:center;z-index:2147483601;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;">📱</button>
         <div class="cui-phone-shell">
             <button class="cui-phone-close" id="cui-phone-close" title="Close">✕</button>
             <div class="cui-phone-mount" id="cui-phone-mount"></div>
@@ -273,10 +273,18 @@ function getSettings() {
     });
     root.querySelector('#cui-phone-close').onclick = () => root.classList.add('cui-collapsed');
 
-    // Re-clamp FAB on viewport resize so it never escapes off-screen.
+    // Re-clamp FAB on viewport resize so it never escapes off-screen,
+    // and recompute auto-fit scale, and reposition phone if open.
     window.addEventListener('resize', () => {
         const cur = loadFabPos();
-        if (cur) applyFabPos(clampFabPos(cur));
+        if (cur) {
+            const c = clampFabPos(cur);
+            applyFabPos(c);
+            // Persist the clamped position so next time we open we use the visible spot.
+            saveFabPos(c.left, c.top);
+        }
+        // recomputeScale is defined below — guard with typeof to be safe.
+        if (typeof recomputeScale === 'function') recomputeScale();
         if (!root.classList.contains('cui-collapsed')) positionPhoneNearFab();
     });
 
@@ -292,10 +300,12 @@ function getSettings() {
     // and then multiply by the user's preferred scale (default 1, range 0.5..1.6).
     const PHONE_W = 390, PHONE_H = 844;
     const SCALE_KEY = 'cuiphone:user_scale';
-    let userScale = 1;
+    // Default 1.15 = phone visibly larger than v3, text easier to read.
+    // Range 0.5..2.0 lets users push past native size on big monitors.
+    let userScale = 1.15;
     try {
         const saved = parseFloat(localStorage.getItem(SCALE_KEY) || '');
-        if (!isNaN(saved) && saved > 0) userScale = Math.max(0.5, Math.min(1.6, saved));
+        if (!isNaN(saved) && saved > 0) userScale = Math.max(0.5, Math.min(2.0, saved));
     } catch(_){}
 
     function recomputeScale() {
@@ -303,15 +313,16 @@ function getSettings() {
         // entire viewport minus a small safety margin.
         const fitW = (window.innerWidth - 32) / PHONE_W;
         const fitH = (window.innerHeight - 32) / PHONE_H;
-        const fit = Math.min(1, fitW, fitH);   // never enlarge past native size
+        // Allow modest upscaling above native (cap 1.3) so on tall monitors
+        // the phone doesn't sit there at 100% looking small.
+        const fit = Math.min(1.3, fitW, fitH);
         const final = Math.max(0.4, fit * userScale);
         root.style.setProperty('--cui-scale', final.toFixed(3));
     }
     recomputeScale();
-    window.addEventListener('resize', recomputeScale);
 
     function applyUserScale(s) {
-        userScale = Math.max(0.5, Math.min(1.6, s));
+        userScale = Math.max(0.5, Math.min(2.0, s));
         try { localStorage.setItem(SCALE_KEY, String(userScale)); } catch(_){}
         recomputeScale();
     }

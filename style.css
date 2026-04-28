@@ -10,10 +10,12 @@
     right: 16px;
     bottom: 16px;
     bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    z-index: 9998;
+    /* Pushed very high so ST modals / mobile overlays don't bury the FAB. */
+    z-index: 2147483600;
     width: 0;          /* root is just a positioning anchor; children are fixed */
     height: 0;
     font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    pointer-events: none;   /* root itself is non-interactive; children re-enable */
 }
 
 /* ---- Floating action button — DRAGGABLE ---- */
@@ -34,7 +36,9 @@
     box-shadow: 0 12px 32px rgba(15, 23, 42, 0.35);
     display: grid;
     place-items: center;
-    z-index: 9999;
+    /* Sit above any ST chrome — mobile menu, sidebar, modals all top out lower. */
+    z-index: 2147483601;
+    pointer-events: auto;
     -webkit-tap-highlight-color: transparent;
     touch-action: none;        /* let JS handle drag without browser scrolling */
     user-select: none;
@@ -59,7 +63,7 @@
     height: 844px;
     background: transparent;
     pointer-events: auto;
-    z-index: 9998;
+    z-index: 2147483600;
     transform: scale(var(--cui-scale, 1));
     transform-origin: bottom right;   /* JS overrides per-corner */
 }
