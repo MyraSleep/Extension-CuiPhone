@@ -187,31 +187,55 @@ function getSettings() {
         fab.style.bottom = 'auto';
     }
     function positionPhoneNearFab() {
-        // The phone-shell renders at PHONE_W x PHONE_H * --cui-scale.
-        // We anchor it to whichever corner of the viewport the FAB currently
-        // sits closest to — phone visually grows out from that corner.
+        // CRITICAL: phone-shell is a 390x844 box that we visually shrink with
+        // `transform: scale(s)`. transform doesn't change the layout box — so
+        // we use top:0; left:0; and then `transform: translate(X,Y) scale(s)`
+        // with `transform-origin: 0 0` to position the SCALED visual exactly
+        // where we want it. Anything else makes the phone fly off-screen on
+        // small viewports (split-screen, narrow windows).
         const r = fab.getBoundingClientRect();
         const vw = window.innerWidth, vh = window.innerHeight;
-        const onRight = (r.left + r.width / 2) > vw / 2;
-        const onBottom = (r.top + r.height / 2) > vh / 2;
 
-        // Anchor to the FAB's nearest corner. The phone overlays the FAB
-        // (no gap) so 底部到 FAB 不会再有空隙.
+        // What's the actual scale the CSS will apply right now?
+        const cs = parseFloat(getComputedStyle(root).getPropertyValue('--cui-scale')) || 1;
+        const scaledW = PHONE_W * cs;
+        const scaledH = PHONE_H * cs;
+
+        const fabCx = r.left + r.width / 2;
+        const fabCy = r.top + r.height / 2;
+        const onRight = fabCx > vw / 2;
+        const onBottom = fabCy > vh / 2;
+
+        // Decide where the SCALED phone's top-left corner should land so its
+        // visible body covers the FAB position with no gap, but stays inside
+        // the viewport with at least an 8px margin.
+        let tx, ty;
         if (onRight) {
-            shell.style.right = Math.max(0, vw - r.right) + 'px';
-            shell.style.left = 'auto';
+            // anchor right edge of phone at FAB's right edge
+            tx = r.right - scaledW;
         } else {
-            shell.style.left = Math.max(0, r.left) + 'px';
-            shell.style.right = 'auto';
+            tx = r.left;
         }
         if (onBottom) {
-            shell.style.bottom = Math.max(0, vh - r.bottom) + 'px';
-            shell.style.top = 'auto';
+            ty = r.bottom - scaledH;
         } else {
-            shell.style.top = Math.max(0, r.top) + 'px';
-            shell.style.bottom = 'auto';
+            ty = r.top;
         }
-        shell.style.transformOrigin = (onBottom ? 'bottom ' : 'top ') + (onRight ? 'right' : 'left');
+        // Clamp into viewport with 8px safety margin so the phone never
+        // disappears off-screen on narrow / short windows.
+        tx = Math.max(8, Math.min(vw - scaledW - 8, tx));
+        ty = Math.max(8, Math.min(vh - scaledH - 8, ty));
+        // If the phone is bigger than the viewport (shouldn't happen given
+        // recomputeScale's cap, but be defensive), pin to top-left.
+        if (scaledW > vw - 16) tx = 8;
+        if (scaledH > vh - 16) ty = 8;
+
+        shell.style.left = '0px';
+        shell.style.top = '0px';
+        shell.style.right = 'auto';
+        shell.style.bottom = 'auto';
+        shell.style.transformOrigin = '0 0';
+        shell.style.transform = `translate(${tx}px, ${ty}px) scale(${cs})`;
     }
 
     // Restore stored FAB position (if any) on startup.
@@ -257,6 +281,23 @@ function getSettings() {
     }
     fab.addEventListener('pointerup', endDrag);
     fab.addEventListener('pointercancel', endDrag);
+
+    // Right-click FAB → reset its position to bottom-right (escape hatch).
+    fab.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        fab.style.left = 'auto';
+        fab.style.top = 'auto';
+        fab.style.right = '16px';
+        fab.style.bottom = '16px';
+        try { localStorage.removeItem(FAB_POS_KEY); } catch(_){}
+    });
+
+    // Esc → close phone (works even if close button is off-screen).
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !root.classList.contains('cui-collapsed')) {
+            root.classList.add('cui-collapsed');
+        }
+    });
 
     // Open / close. After a drag, swallow the click so the phone doesn't toggle.
     const toggle = () => {
