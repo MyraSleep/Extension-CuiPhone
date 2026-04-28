@@ -123,7 +123,17 @@ function getSettings() {
     return extensionSettings[MODULE_NAME];
 }
 
+// Re-entry guard. ST's extension system can call this module twice (e.g.
+// after a reload). Without this we'd double-bind every listener and
+// accumulate setInterval timers, which makes the FAB jitter and burns CPU.
+if (window.__cuiPhoneBooted) {
+    console.log('[CUI Phone] already booted; skipping re-init.');
+} else {
+    window.__cuiPhoneBooted = true;
+}
+
 (async function init() {
+    if (window.__cuiPhoneInitDone) return;
     // Wait for SillyTavern global to be available
     if (typeof SillyTavern === 'undefined' || !SillyTavern.getContext) {
         console.warn('[CUI Phone] SillyTavern context not ready; aborting.');
@@ -135,6 +145,7 @@ function getSettings() {
 
     await injectInnerCss();
     const root = buildRoot();
+    window.__cuiPhoneInitDone = true;
 
     // Load HTML fragment
     let html;
@@ -149,11 +160,18 @@ function getSettings() {
     const mount = root.querySelector('#cui-phone-mount');
     mount.innerHTML = html;
 
-    // Boot the original phone UI script
+    // Boot the original phone UI script. If this throws, the phone HTML is
+    // visible but inert — surface it so the user knows to open DevTools.
+    let phoneBootOk = true;
     try {
         mountPhoneUI(mount);
     } catch (e) {
+        phoneBootOk = false;
         console.error('[CUI Phone] mountPhoneUI failed:', e);
+        const banner = document.createElement('div');
+        banner.style.cssText = 'position:absolute;top:8px;left:8px;right:8px;padding:8px 10px;border-radius:8px;background:#dc2626;color:#fff;font:13px system-ui;z-index:99;line-height:1.4';
+        banner.textContent = '手机 UI 加载失败：' + (e && e.message || e) + '。请打开控制台查看堆栈。';
+        mount.appendChild(banner);
     }
 
     // ---- FAB drag + open-near-FAB positioning ----
@@ -258,7 +276,8 @@ function getSettings() {
     fab.addEventListener('pointermove', (e) => {
         if (!dragging) return;
         const dx = e.clientX - sx, dy = e.clientY - sy;
-        if (!didMove && (Math.abs(dx) + Math.abs(dy) > 4)) didMove = true;
+        // 6px threshold (was 4): higher = fewer accidental drags from finger tremor.
+        if (!didMove && (Math.abs(dx) + Math.abs(dy) > 6)) didMove = true;
         if (!didMove) return;
         const fw = fab.offsetWidth || 52;
         const fh = fab.offsetHeight || 52;
@@ -299,9 +318,11 @@ function getSettings() {
         }
     });
 
-    // Open / close. After a drag, swallow the click so the phone doesn't toggle.
+    // Open / close. Hoist root to body tail just before showing the phone
+    // so we always start out on top, regardless of what ST inserted.
     const toggle = () => {
         if (root.classList.contains('cui-collapsed')) {
+            hoistIfNeeded();
             positionPhoneNearFab();
             root.classList.remove('cui-collapsed');
         } else {
@@ -336,7 +357,7 @@ function getSettings() {
     }, { capture: true });
     window.addEventListener('pointerup', (e) => {
         const dx = e.clientX - _winDownX, dy = e.clientY - _winDownY;
-        const moved = Math.abs(dx) + Math.abs(dy) > 4;
+        const moved = Math.abs(dx) + Math.abs(dy) > 6;
         // Close button takes priority when phone is open.
         if (!moved && pointHitsCloseBtn(e.clientX, e.clientY)) {
             e.preventDefault(); e.stopPropagation();
@@ -360,15 +381,23 @@ function getSettings() {
         }, 50);
     }, { capture: true });
 
-    // Periodic hoist: if some ST drawer reparents/overlays us, re-append the
-    // root to body's tail every couple seconds so we end up on top in DOM
-    // order (which matters when z-index alone isn't enough due to stacking
-    // contexts). This is cheap and self-healing.
-    setInterval(() => {
+    // Hoist root to body tail when needed. Two triggers:
+    //   (a) MutationObserver: any time something is appended to body
+    //   (b) Right before the user opens the phone (in toggle())
+    // This is cheaper than a 2s polling timer and reacts immediately when
+    // ST/another extension inserts a sibling above us.
+    function hoistIfNeeded() {
         if (document.body && document.body.lastElementChild !== root) {
             document.body.appendChild(root);
         }
-    }, 2000);
+    }
+    try {
+        const mo = new MutationObserver(() => hoistIfNeeded());
+        mo.observe(document.body, { childList: true });
+    } catch (_) {
+        // Fall back to a low-frequency timer only if MO is unavailable.
+        setInterval(hoistIfNeeded, 5000);
+    }
     root.querySelector('#cui-phone-close').onclick = () => root.classList.add('cui-collapsed');
 
     // Re-clamp FAB on viewport resize so it never escapes off-screen,
