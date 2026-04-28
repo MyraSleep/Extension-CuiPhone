@@ -162,28 +162,44 @@ function getSettings() {
     root.querySelector('#cui-phone-close').onclick = () => root.classList.add('cui-collapsed');
     if (!settings.startCollapsed) root.classList.remove('cui-collapsed');
 
-    // ---- User-adjustable scale (Ctrl + wheel inside the phone) ----
-    const SCALE_KEY = 'cuiphone:scale';
-    function applyScale(s) {
-        const clamped = Math.max(0.5, Math.min(1.6, s));
-        root.style.setProperty('--cui-scale', String(clamped));
-        try { localStorage.setItem(SCALE_KEY, String(clamped)); } catch(_){}
-    }
+    // ---- Auto-fit + user-adjustable scale ----
+    // Native phone-shell size is 390 x 844. We must fit it inside
+    //   width-budget = innerWidth - 32   (margins)
+    //   height-budget = innerHeight - 96  (FAB + margins)
+    // and then multiply by the user's preferred scale (default 1, range 0.5..1.6).
+    const PHONE_W = 390, PHONE_H = 844;
+    const SCALE_KEY = 'cuiphone:user_scale';
+    let userScale = 1;
     try {
         const saved = parseFloat(localStorage.getItem(SCALE_KEY) || '');
-        if (!isNaN(saved) && saved > 0) applyScale(saved);
+        if (!isNaN(saved) && saved > 0) userScale = Math.max(0.5, Math.min(1.6, saved));
     } catch(_){}
+
+    function recomputeScale() {
+        const fitW = (window.innerWidth - 32) / PHONE_W;
+        const fitH = (window.innerHeight - 96) / PHONE_H;
+        const fit = Math.min(1, fitW, fitH);   // never enlarge past native size
+        const final = Math.max(0.4, fit * userScale);
+        root.style.setProperty('--cui-scale', final.toFixed(3));
+    }
+    recomputeScale();
+    window.addEventListener('resize', recomputeScale);
+
+    function applyUserScale(s) {
+        userScale = Math.max(0.5, Math.min(1.6, s));
+        try { localStorage.setItem(SCALE_KEY, String(userScale)); } catch(_){}
+        recomputeScale();
+    }
     root.addEventListener('wheel', (e) => {
         if (!e.ctrlKey) return;
         e.preventDefault();
-        const cur = parseFloat(getComputedStyle(root).getPropertyValue('--cui-scale')) || 1;
-        const next = cur + (e.deltaY < 0 ? 0.05 : -0.05);
-        applyScale(next);
+        applyUserScale(userScale + (e.deltaY < 0 ? 0.05 : -0.05));
     }, { passive: false });
-    // Expose for manual override from console: window.CuiPhone.setScale(1.2)
+
     window.CuiPhone = window.CuiPhone || {};
-    window.CuiPhone.setScale = applyScale;
-    window.CuiPhone.getScale = () => parseFloat(getComputedStyle(root).getPropertyValue('--cui-scale')) || 1;
+    window.CuiPhone.setScale = applyUserScale;
+    window.CuiPhone.getScale = () => userScale;
+    window.CuiPhone.recomputeScale = recomputeScale;
 
     // Wire ST <-> phone (chat sync, send-back, events)
     try {
