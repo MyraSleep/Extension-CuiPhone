@@ -1,20 +1,14 @@
 /* =====================================================================
- * CUI Phone — outer container styles (extension-level only)
- * Inner phone UI styles live in phone-inner.css and are scoped under
- * #cui-phone-root to prevent any leakage into SillyTavern's main UI.
- * =====================================================================
- *
- * v2 layout: no outer panel. The FAB toggles a transparent shell that
- * directly hosts the phone UI, plus a small ✕ close button at the top
- * right of the phone. This removes scrolling on smaller screens and
- * makes the touch experience cleaner on phones.
- */
+ * CUI Phone — outer container styles
+ * v3 layout: simple absolute positioning, no flex squeezing.
+ * The phone-shell (defined in phone-inner.css at ~390x844) is rendered
+ * as-is; we just translate it via transform on small screens.
+ * ===================================================================== */
 
 #cui-phone-root {
     position: fixed;
     right: 16px;
     bottom: 16px;
-    /* iOS safe-area: layered fallback so a missing env() never breaks bottom. */
     bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     z-index: 9998;
     font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -33,37 +27,31 @@
     box-shadow: 0 12px 32px rgba(15, 23, 42, 0.35);
     display: grid;
     place-items: center;
-    transition: transform .15s ease;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
 }
 #cui-phone-root .cui-phone-fab:hover { transform: scale(1.06); }
 #cui-phone-root .cui-phone-fab:active { transform: scale(0.96); }
 
-/* ---- Phone container (replaces the old panel) ---- */
+/* ---- Phone container — sized to phone-shell exactly ---- */
 #cui-phone-root .cui-phone-shell {
     position: absolute;
     right: 0;
     bottom: 64px;
-    /* No background, no border, no padding — the phone-shell inside provides its own chrome. */
+    width: 390px;        /* match phone-shell intrinsic width */
+    height: 844px;       /* match phone-shell intrinsic height */
     background: transparent;
     pointer-events: auto;
-    /* Constrain so the phone can never overflow the viewport. */
-    max-height: calc(100vh - 80px);
-    max-width: calc(100vw - 24px);
-    display: flex;
-    align-items: flex-end;
-    justify-content: flex-end;
 }
 #cui-phone-root.cui-collapsed .cui-phone-shell { display: none; }
 
 #cui-phone-root .cui-phone-mount {
+    width: 100%;
+    height: 100%;
     position: relative;
-    /* Phone shell is ~390x844; we let it size itself. */
-    display: block;
 }
 
-/* ---- Close button — floats over the phone's top-right ---- */
+/* ---- Close button ---- */
 #cui-phone-root .cui-phone-close {
     position: absolute;
     top: -10px;
@@ -86,7 +74,30 @@
 }
 #cui-phone-root .cui-phone-close:hover { background: #0f172a; }
 
-/* ---- Mobile / small-viewport adaptation ---- */
+/* ---- Small viewport: shrink the whole shell via transform ---- *
+ * We change `transform-origin` to bottom-right so the phone stays
+ * pinned to the FAB anchor. Width/height stay declared above so
+ * layout doesn't collapse.
+ */
+@media (max-height: 920px) {
+    #cui-phone-root .cui-phone-shell {
+        transform: scale(0.85);
+        transform-origin: bottom right;
+    }
+}
+@media (max-height: 760px) {
+    #cui-phone-root .cui-phone-shell {
+        transform: scale(0.7);
+        transform-origin: bottom right;
+    }
+}
+@media (max-height: 620px) {
+    #cui-phone-root .cui-phone-shell {
+        transform: scale(0.58);
+        transform-origin: bottom right;
+    }
+}
+
 @media (max-width: 480px) {
     #cui-phone-root {
         right: 8px;
@@ -96,36 +107,18 @@
     #cui-phone-root .cui-phone-shell {
         right: 0;
         bottom: 60px;
-    }
-    /* Shrink the phone shell so 390x844 fits a typical 360x720 device. */
-    #cui-phone-root .cui-phone-mount .phone-shell {
-        transform: scale(0.86);
+        transform: scale(0.8);
         transform-origin: bottom right;
     }
 }
 
-/* Landscape phones: aggressive shrink so the phone fits vertically. */
-@media (max-height: 720px) {
-    #cui-phone-root .cui-phone-mount .phone-shell {
-        transform: scale(0.82);
-        transform-origin: bottom right;
-    }
-}
-@media (max-height: 600px) {
-    #cui-phone-root .cui-phone-mount .phone-shell {
-        transform: scale(0.7);
-        transform-origin: bottom right;
-    }
-}
-
-/* ---- iOS auto-zoom guard: any input/textarea inside our root must be 16px+ ---- */
+/* ---- iOS auto-zoom guard ---- */
 #cui-phone-root input,
 #cui-phone-root textarea,
 #cui-phone-root select {
     font-size: 16px;
 }
 
-/* ---- Touch tap target floor for small buttons inside the phone ---- */
 @media (pointer: coarse) {
     #cui-phone-root button,
     #cui-phone-root .tool-btn,
