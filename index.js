@@ -312,6 +312,23 @@ function getSettings() {
         if (didMove) { e.preventDefault(); e.stopPropagation(); didMove = false; return; }
         toggle();
     });
+    // Belt-and-braces: some hosts (or the host page's CSS layer order)
+    // intercept click. We watch click; if it doesn't arrive within 250ms
+    // after a clean mouseup with no drag, we force-toggle. The flag is reset
+    // by the click handler so a normal click is a no-op for this fallback.
+    let _clickFired = false;
+    fab.addEventListener('click', () => { _clickFired = true; }, true);
+    fab.addEventListener('mouseup', (e) => {
+        if (e.button !== 0) return;
+        if (didMove) return;
+        _clickFired = false;
+        setTimeout(() => {
+            if (!_clickFired && !didMove) {
+                console.warn('[CUI Phone] click suppressed by host; forcing toggle');
+                toggle();
+            }
+        }, 250);
+    });
     root.querySelector('#cui-phone-close').onclick = () => root.classList.add('cui-collapsed');
 
     // Re-clamp FAB on viewport resize so it never escapes off-screen,
@@ -367,11 +384,31 @@ function getSettings() {
         try { localStorage.setItem(SCALE_KEY, String(userScale)); } catch(_){}
         recomputeScale();
     }
-    root.addEventListener('wheel', (e) => {
+    // Ctrl+wheel ⇌ resize. Listener is on `window` (not `root`) because root
+    // has pointer-events:none for click pass-through. We accept the event
+    // ONLY when the cursor is actually over the FAB or the phone-shell;
+    // otherwise let ST do whatever it wants with the wheel.
+    window.addEventListener('wheel', (e) => {
         if (!e.ctrlKey) return;
+        const t = e.target;
+        if (!t || !(t instanceof Element)) return;
+        // Is the wheel over our UI? Check ancestor chain, plus elementFromPoint
+        // since pointer-events:none on root would otherwise hide it from `target`.
+        const overOurs = t.closest && (t.closest('#cui-phone-fab') || t.closest('.cui-phone-shell'));
+        if (!overOurs) {
+            // Fallback: pointer-events:none on root could route the event to ST,
+            // so use coordinates to decide if cursor is on top of phone-shell.
+            const sr = shell.getBoundingClientRect();
+            const fr = fab.getBoundingClientRect();
+            const x = e.clientX, y = e.clientY;
+            const inShell = !root.classList.contains('cui-collapsed') &&
+                x >= sr.left && x <= sr.right && y >= sr.top && y <= sr.bottom;
+            const inFab = x >= fr.left && x <= fr.right && y >= fr.top && y <= fr.bottom;
+            if (!inShell && !inFab) return;
+        }
         e.preventDefault();
         applyUserScale(userScale + (e.deltaY < 0 ? 0.05 : -0.05));
-    }, { passive: false });
+    }, { passive: false, capture: true });
 
     window.CuiPhone = window.CuiPhone || {};
     window.CuiPhone.setScale = applyUserScale;
