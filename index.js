@@ -24,14 +24,33 @@ const EXT_PATH = (() => {
 })();
 console.log('[CUI Phone] EXT_PATH =', EXT_PATH);
 
-/** Inject inner phone CSS once (scoped under #cui-phone-root). */
-function injectInnerCss() {
+/** Inject inner phone CSS once (scoped under #cui-phone-root).
+ *  Uses fetch+<style> rather than <link> so we can see the failure mode
+ *  loudly (404 -> visible error in console + on-screen banner) and so the
+ *  styles survive any path/serving quirk where ST doesn't expose the file
+ *  via the static route.
+ */
+async function injectInnerCss() {
     if (document.getElementById('cui-phone-inner-css')) return;
-    const link = document.createElement('link');
-    link.id = 'cui-phone-inner-css';
-    link.rel = 'stylesheet';
-    link.href = `${EXT_PATH}/phone-inner.css`;
-    document.head.appendChild(link);
+    const url = `${EXT_PATH}/phone-inner.css`;
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${url}`);
+        const cssText = await resp.text();
+        const style = document.createElement('style');
+        style.id = 'cui-phone-inner-css';
+        style.textContent = cssText;
+        document.head.appendChild(style);
+        console.log('[CUI Phone] phone-inner.css inlined,', cssText.length, 'bytes');
+    } catch (e) {
+        console.error('[CUI Phone] Failed to load phone-inner.css from', url, e);
+        // Fallback: try a <link> too, in case fetch was blocked but link works.
+        const link = document.createElement('link');
+        link.id = 'cui-phone-inner-css';
+        link.rel = 'stylesheet';
+        link.href = url;
+        document.head.appendChild(link);
+    }
 }
 
 /** Build the floating root skeleton.
@@ -114,7 +133,7 @@ function getSettings() {
     const ctx = SillyTavern.getContext();
     const settings = getSettings();
 
-    injectInnerCss();
+    await injectInnerCss();
     const root = buildRoot();
 
     // Load HTML fragment

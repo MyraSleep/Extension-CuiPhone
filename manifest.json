@@ -6,6 +6,7 @@
   "dependencies": [],
   "js": "index.js",
   "css": "style.css",
+  "assets": ["phone-inner.css", "phone.html", "phone.js", "st-bridge.js"],
   "author": "you",
   "version": "0.1.0",
   "homePage": "",
