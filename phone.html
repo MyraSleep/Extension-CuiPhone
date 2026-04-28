@@ -2,7 +2,7 @@
     <div class="dynamic-island"></div>
     <div class="screen">
       <div class="wallpaper"></div>
-      <div class="statusbar"><span id="statusTime"></span><div class="status-right"><span>LTE</span><span>87%</span><div class="battery"><div class="battery-fill"></div></div></div></div>
+      <div class="statusbar"><span id="statusTime"></span><div class="status-right"><span>LTE</span><span id="statusBatteryPct">87%</span><div class="battery" id="statusBattery"><div class="battery-fill" id="statusBatteryFill"></div></div></div></div>
 
       <section class="view lock-view active" data-view="lock">
         <div class="lock-top"><div class="lock-date" id="lockDate"></div><div class="lock-time" id="lockTime"></div></div>
@@ -103,7 +103,7 @@
             <input class="text-input" id="composerLikes" placeholder="Feed 点赞数，如 1,245" />
             <textarea class="text-area" id="composerText" placeholder="正文内容"></textarea>
             <textarea class="text-area" id="composerComments" placeholder="Feed 评论，每行一条"></textarea>
-            <div class="composer-note">这版保留 ST 友好文本结构：你可以直接粘贴角色卡 / 世界书生成的内容，或者用下面的导入面板批量注入。</div>
+
             <div class="tool-row"><button class="tool-btn secondary" id="closeComposerBtn">关闭</button><button class="tool-btn primary" id="publishComposerBtn">发布</button></div>
           </div>
         </section>

@@ -856,6 +856,73 @@ export function mountPhoneUI(root) {
       $('#statusTime').textContent = `${hh}:${mm}`;
       $('#lockTime').textContent = `${hh}:${mm}`;
       $('#lockDate').textContent = `${days[now.getDay()]} ${(now.getMonth()+1)}/${now.getDate()}`;
+      updateBattery();
+    }
+
+    /* ---- Battery: real (navigator.getBattery) when available, fake fallback otherwise ----
+     * Real path: read once, then re-read on each tick — the Battery API returns
+     * a live object whose .level updates as the OS reports changes. We just
+     * re-paint the DOM each second so it stays in sync with `time`.
+     * Fallback path: deterministic curve based on wall-clock time so the
+     * displayed % drifts down naturally instead of being a static "87%".
+     */
+    let _batteryObj = null;
+    let _batteryReqd = false;
+    function ensureBattery(){
+      if (_batteryReqd) return;
+      _batteryReqd = true;
+      try {
+        if (navigator.getBattery) {
+          navigator.getBattery().then(b => {
+            _batteryObj = b;
+            // re-paint immediately on any change
+            const repaint = () => paintBattery();
+            b.addEventListener && b.addEventListener('levelchange', repaint);
+            b.addEventListener && b.addEventListener('chargingchange', repaint);
+            paintBattery();
+          }).catch(() => {});
+        }
+      } catch(_){}
+    }
+    function fakeBatteryPct(){
+      // Tied to clock so it slowly cycles 100→40 over 24h, then jumps back.
+      // Charging "animation" uses the seconds digit so the bar visibly breathes.
+      const now = new Date();
+      const minutes = now.getHours()*60 + now.getMinutes();
+      const dayFrac = minutes / (24*60);                    // 0→1
+      const base = Math.round(100 - dayFrac * 60);          // 100 → 40
+      // Add a small jitter so the % feels alive (±1% via seconds).
+      const jitter = (now.getSeconds() % 7 === 0) ? -1 : 0;
+      return Math.max(20, Math.min(100, base + jitter));
+    }
+    function paintBattery(){
+      const pctEl = document.getElementById('statusBatteryPct');
+      const fillEl = document.getElementById('statusBatteryFill');
+      const wrapEl = document.getElementById('statusBattery');
+      if (!pctEl || !fillEl || !wrapEl) return;
+      let pct, charging = false;
+      if (_batteryObj && typeof _batteryObj.level === 'number') {
+        pct = Math.round(_batteryObj.level * 100);
+        charging = !!_batteryObj.charging;
+      } else {
+        pct = fakeBatteryPct();
+      }
+      pctEl.textContent = pct + '%';
+      // Battery shell inner width is 21px (24 - 2*1.5 border padding); fill is 15px at 100%.
+      // Match the original look: 100% -> ~15px. We scale linearly.
+      const maxW = 15;
+      const w = Math.max(2, Math.round(maxW * pct / 100));
+      fillEl.style.width = w + 'px';
+      // Color by level: low=red, mid=white (default), charging=green tint.
+      let color = '#fff';
+      if (charging) color = '#34d399';
+      else if (pct <= 20) color = '#ff5a5f';
+      fillEl.style.background = color;
+      wrapEl.title = charging ? `充电中 ${pct}%` : `电量 ${pct}%`;
+    }
+    function updateBattery(){
+      ensureBattery();
+      paintBattery();
     }
 
     function bindUI(){
