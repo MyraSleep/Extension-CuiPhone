@@ -1,32 +1,59 @@
 /* =====================================================================
  * CUI Phone — SillyTavern <-> Phone bridge
  * ---------------------------------------------------------------------
- * Reads ST's current character + chat and pushes them into the phone UI
- * via CuiPhone.refreshFromST(). Also exposes CuiPhone.sendToST(text)
- * which mirrors a phone-side message into ST's main composer and sends.
+ * Listens to ST chat events. On every change it scans ALL chat messages
+ * for <kakao_chat> / <ins_feed> / <ins_story> / <user_profile> blocks,
+ * concatenates the matches, and pushes them into the phone UI via
+ * CuiPhone.applyImport().
+ *
+ * Rationale: the worldbook instructs the LLM to wrap KKT and INS output
+ * in those tags. The phone is a renderer for those tags — not a literal
+ * mirror of the chat log.
  * ===================================================================== */
 
-/**
- * Resolve a usable avatar URL from a character object.
- * NOTE: The exact path scheme has changed across ST versions — this needs
- * to be verified against your installed version. We try common patterns.
- */
+const BLOCK_PATTERNS = [
+    /<kakao_chat>[\s\S]*?<\/kakao_chat>/g,
+    /<ins_feed>[\s\S]*?<\/ins_feed>/g,
+    /<ins_story>[\s\S]*?<\/ins_story>/g,
+    /<user_profile>[\s\S]*?<\/user_profile>/g,
+];
+
+/** Resolve a usable avatar URL from a character object. */
 function resolveAvatarUrl(character) {
     if (!character) return '';
     const file = character.avatar;
     if (!file || file === 'none') return '';
-    // Most common in modern ST: thumbnail endpoint
     return `/thumbnail?type=avatar&file=${encodeURIComponent(file)}`;
 }
 
-/** Convert ST chat message -> phone-friendly shape. */
-function normalizeMessage(m, characterName) {
-    return {
-        from: m.is_user ? 'me' : (m.name || characterName || 'them'),
-        is_user: !!m.is_user,
-        text: typeof m.mes === 'string' ? m.mes : String(m.mes ?? ''),
-        time: m.send_date || '',
-    };
+/** Pull all matching wrapped blocks out of the chat log, in order. */
+function extractBlocksFromChat(chat) {
+    if (!Array.isArray(chat) || !chat.length) return '';
+    const pieces = [];
+    for (const m of chat) {
+        const text = typeof m?.mes === 'string' ? m.mes : '';
+        if (!text) continue;
+        for (const re of BLOCK_PATTERNS) {
+            const found = text.match(re);
+            if (found) pieces.push(...found);
+        }
+    }
+    return pieces.join('\n\n');
+}
+
+/**
+ * Auto-detect the most recent room/chat to focus.
+ * If the latest LLM message contains a <kakao_chat>, jump to that room.
+ */
+function pickActivePanel(chat) {
+    if (!Array.isArray(chat)) return null;
+    for (let i = chat.length - 1; i >= 0; i--) {
+        const t = chat[i]?.mes || '';
+        if (/<kakao_chat>/.test(t)) return 'kkt';
+        if (/<ins_story>/.test(t)) return 'story';
+        if (/<ins_feed>/.test(t)) return 'feed';
+    }
+    return null;
 }
 
 export function wireSTBridge(ctx, phone) {
@@ -34,10 +61,8 @@ export function wireSTBridge(ctx, phone) {
         console.warn('[CUI Phone] window.CuiPhone is not ready; bridge skipped.');
         return;
     }
-
     const { eventSource, event_types } = ctx;
 
-    // Read current character (always fresh — characterId is just an index).
     const getCurrentCharacter = () => {
         const c = SillyTavern.getContext();
         const idx = c.characterId;
@@ -50,27 +75,56 @@ export function wireSTBridge(ctx, phone) {
         };
     };
 
-    const getCurrentChat = () => {
-        const c = SillyTavern.getContext();
-        const character = getCurrentCharacter();
-        return (c.chat || []).map(m => normalizeMessage(m, character?.name));
-    };
-
     const sync = () => {
         try {
-            phone.refreshFromST?.({
-                character: getCurrentCharacter(),
-                chat: getCurrentChat(),
-            });
+            const c = SillyTavern.getContext();
+            const chat = c.chat || [];
+            const importText = extractBlocksFromChat(chat);
+            const character = getCurrentCharacter();
+
+            if (importText) {
+                // Reset rooms list before applying so old <kakao_chat> data
+                // from previous chats doesn't linger.
+                phone.state.rooms = [];
+                phone.state.threads = {};
+                phone.applyImport(importText);
+
+                // If the parsed rooms have no avatar, fall back to ST character avatar
+                if (character && phone.state.rooms.length) {
+                    for (const room of phone.state.rooms) {
+                        if (!room.avatar && room.name === character.name) {
+                            phone.state.roomIdentity[room.id] = {
+                                name: character.name,
+                                avatar: character.avatar,
+                            };
+                        }
+                    }
+                    phone.renderChatList?.();
+                    phone.renderThread?.();
+                }
+
+                // Auto-jump to the panel that was just produced
+                const target = pickActivePanel(chat);
+                if (target === 'kkt') phone.switchKktPanel?.('list');
+                if (target === 'feed') phone.switchInsPanel?.('feed');
+                if (target === 'story') phone.switchInsPanel?.('story');
+            } else {
+                // No wrapped blocks anywhere — show empty state
+                phone.state.rooms = [];
+                phone.state.threads = {};
+                phone.state.stories = [];
+                phone.state.posts = [];
+                phone.renderChatList?.();
+                phone.renderThread?.();
+            }
         } catch (e) {
-            console.error('[CUI Phone] refreshFromST failed:', e);
+            console.error('[CUI Phone] sync failed:', e);
         }
     };
 
-    // Initial sync
-    sync();
+    // Initial sync (in case chat is already populated when extension loads)
+    setTimeout(sync, 200);
 
-    // Subscribe to all relevant events
     const events = [
         'CHAT_CHANGED',
         'MESSAGE_RECEIVED',
@@ -89,11 +143,9 @@ export function wireSTBridge(ctx, phone) {
     }
 
     /**
-     * Send a message from the phone UI into ST.
-     * Strategy: write into ST's main textarea + click the send button.
-     * This is intentionally low-level so it works across versions.
-     * NOTE: If your ST exposes a stable Generate() / sendMessageAsUser(),
-     * prefer that. Verify against your installed version.
+     * Send a message from the phone UI into ST's main composer.
+     * Strategy: write into #send_textarea + click #send_but. Works across
+     * recent ST versions; verify against your installed version if needed.
      */
     phone.sendToST = async (text) => {
         if (!text || !text.trim()) return;
@@ -105,12 +157,13 @@ export function wireSTBridge(ctx, phone) {
         }
         ta.value = text;
         ta.dispatchEvent(new Event('input', { bubbles: true }));
-        // Some versions need a microtask before click registers properly
         await Promise.resolve();
         btn.click();
     };
 
-    // Expose helpers for debugging
-    phone._st = { getCurrentCharacter, getCurrentChat, sync };
-    console.log('[CUI Phone] ST bridge wired.');
+    // Manual refresh helper (handy in DevTools)
+    phone.forceSync = sync;
+    phone._st = { getCurrentCharacter, extractBlocksFromChat, sync };
+
+    console.log('[CUI Phone] ST bridge wired (auto-detects <kakao_chat>/<ins_feed>/<ins_story>).');
 }

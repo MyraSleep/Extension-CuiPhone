@@ -39,68 +39,7 @@ export function mountPhoneUI(root) {
       defaultImport:''
     };
 
-    const defaultImportText = `<user_profile>
-handle=my.archive
-name=你的名字
-bio=这是用户主页，可自定义。角色动态在 Feed 里看。
-link=your-link.example
-highlights=工作,片场,夜景,随手拍
-grid=archive,late,busan,notes,daily,mirror,blue,night,off
-</user_profile>
-
-<ins_story>
-@jungsoo_23 · 崔宗秀 | 23:41
-[图 · ONE MORE 片段]
-[音乐 · Agust D - The Last]
-story 字幕：先看完，再回来找我。
-</ins_story>
-<ins_story>
-@byeongchan_21 · 卞灿 | 00:32
-[图 · 深夜便利店]
-story 字幕：今天结束得比想象晚。
-</ins_story>
-<ins_story>
-@yjjeon_4 · 全有真 | 18:10
-[图 · 练习室镜子自拍]
-[贴纸 · mood]
-</ins_story>
-
-<ins_feed>
-@jungsoo_23 · 崔宗秀 | 18:42 Busan
-[图 · MVP 结束后的后台照]
-❤️ 2,105
-回头看。
-@me：你这张像海报。
-@byeongchan_21：确实。
-
-@byeongchan_21 · 卞灿 | 13:30 Seoul
-[图 · 棚拍空档]
-❤️ 1,638
-今天也在录。
-@me：辛苦了。
-@jungsoo_23：下班。
-
-@yjjeon_4 · 全有真 | 17:55 Seoul
-[图 · 楼顶风景]
-❤️ 2,876
-傍晚有点漂亮。
-@me：这张很适合发 story。
-@jungsoo_23：保存了。
-</ins_feed>
-
-<kkt_room id="choi" name="崔宗秀">
-other|22:14|你醒了再回。
-me|22:15|刚看到。
-other|22:16|INS 那边也记得更新。
-other|22:16|Story 不要发完就跑。
-me|22:17|知道了。
-</kkt_room>
-
-<kkt_room id="team" name="工作群">
-other|20:14|7:10 集合。
-other|20:14|服装不要忘。
-me|20:16|收到。
-</kkt_room>`;
+    const defaultImportText = '';
 
     const $ = s => root.querySelector(s);
     const $$ = s => Array.from(root.querySelectorAll(s));
@@ -233,6 +172,75 @@ me|20:16|收到。
       });
     }
 
+    /**
+     * Parse <kakao_chat>...</kakao_chat> blocks per worldbook spec:
+     *   - Optional first line: group name like "[群聊] xxx" / "[KKT群] xxx"
+     *   - Repeating two-line message blocks:
+     *       "⚫ 角色名 | HH:MM"  + next line  "ᄀ 内容"     (other side)
+     *       "🟡 用户名 | HH:MM"  + next line  "ᄀ 内容"     (me)
+     *   - Sticker syntax inside content:  <bqb>描述 文件名.gif</bqb>
+     * Each <kakao_chat> block becomes ONE room. Multiple blocks => multiple rooms.
+     */
+    function parseKakaoChatBlocks(text){
+      const out = [];
+      const matches = [...String(text || '').matchAll(/<kakao_chat>\s*([\s\S]*?)\s*<\/kakao_chat>/g)];
+      matches.forEach((m, blockIdx) => {
+        const lines = m[1].split('\n').map(s => s.trim()).filter(Boolean);
+        if (!lines.length) return;
+
+        // Detect optional group-name header line
+        let groupName = null;
+        if (lines[0] && !/^[⚫🟡ᄀ]/u.test(lines[0])) {
+          groupName = lines[0].replace(/^\s*\[(?:群聊|KKT群|群)\]\s*/, '').trim() || lines[0];
+          lines.shift();
+        }
+
+        const messages = [];
+        let primaryName = null; // first 1v1 partner becomes the room name fallback
+        for (let i = 0; i < lines.length; i++) {
+          const head = lines[i];
+          const headMatch = head.match(/^([⚫🟡])\s*([^|]+?)\s*\|\s*(\d{1,2}:\d{2})\s*$/u);
+          if (!headMatch) continue;
+          const isMe = headMatch[1] === '🟡';
+          const speaker = headMatch[2].trim();
+          const time = headMatch[3];
+          // Find next "ᄀ" body line
+          let body = '';
+          for (let j = i + 1; j < lines.length; j++) {
+            const b = lines[j];
+            if (/^[⚫🟡]/u.test(b)) break;
+            const bm = b.match(/^ᄀ\s*(.*)$/);
+            if (bm) { body = bm[1].trim(); i = j; break; }
+          }
+          if (!body) continue;
+          if (!isMe && !primaryName) primaryName = speaker;
+          messages.push({
+            side: isMe ? 'me' : 'other',
+            name: isMe ? 'me' : speaker,
+            time,
+            text: body,
+          });
+        }
+
+        if (!messages.length && !groupName) return;
+
+        const id = 'kkt_' + blockIdx;
+        const roomName = groupName || primaryName || '聊天室';
+        const room = {
+          id,
+          name: roomName,
+          avatar: '',
+          preview: messages.length ? messages[messages.length - 1].text.slice(0, 60) : '',
+          time: messages.length ? messages[messages.length - 1].time : '',
+          unread: messages.filter(x => x.side !== 'me').length,
+          kind: groupName ? '群聊' : '单聊',
+          read: false,
+        };
+        out.push({ room, messages });
+      });
+      return out;
+    }
+
     function applyImport(text){
       const raw = String(text || '').trim();
       if(!raw) return;
@@ -241,7 +249,20 @@ me|20:16|收到。
       const posts = parseFeedBlocks(raw);
       if(stories.length) state.stories = stories;
       if(posts.length){ state.posts = posts; state.user.posts = Math.max(state.user.posts, posts.length); }
-      parseKktRooms(raw);
+
+      // Prefer new <kakao_chat> format; fall back to legacy <kkt_room>
+      const kakao = parseKakaoChatBlocks(raw);
+      if (kakao.length) {
+        // Replace rooms / threads completely with the parsed set (predictable behaviour)
+        state.rooms = kakao.map(k => k.room);
+        state.threads = {};
+        kakao.forEach(k => { state.threads[k.room.id] = k.messages; });
+        if (!state.rooms.find(r => r.id === state.currentRoom)) {
+          state.currentRoom = state.rooms[0]?.id || state.currentRoom;
+        }
+      } else {
+        parseKktRooms(raw);
+      }
       refreshAll();
     }
 
@@ -378,16 +399,38 @@ me|20:16|收到。
       $$('#chatList [data-avatar]').forEach(el => applyAvatar(el, el.dataset.avatar, el.dataset.fallback));
     }
 
+    /**
+     * Render a single bubble's content. Detects <bqb>desc filename.ext</bqb>
+     * stickers and renders them as a small sticker tile (text-only fallback,
+     * since we don't ship the image files).
+     */
+    function renderBubbleContent(text){
+      const raw = String(text || '');
+      const m = raw.match(/^\s*<bqb>\s*([\s\S]*?)\s*<\/bqb>\s*$/);
+      if (m) {
+        const inner = m[1].trim();
+        // last whitespace-separated token that looks like a filename
+        const fileMatch = inner.match(/(\S+\.(?:png|jpe?g|gif|webp))\s*$/i);
+        const file = fileMatch ? fileMatch[1] : '';
+        const desc = file ? inner.slice(0, inner.length - file.length).trim() : inner;
+        return `<div class="sticker-bubble" title="${escapeHtml(file)}">`
+             + `<div class="sticker-emoji">🎨</div>`
+             + `<div class="sticker-desc">${escapeHtml(desc || file || '贴纸')}</div>`
+             + `</div>`;
+      }
+      return escapeHtml(raw);
+    }
+
     function renderThread(){
       const room = roomById(state.currentRoom);
       const title = state.roomIdentity[room.id]?.name || room.name;
       $('#roomName').textContent = title;
-      $('#roomSub').textContent = room.id === 'team' ? '群聊' : room.kind;
+      $('#roomSub').textContent = room.kind || '聊天';
       applyAvatar($('#roomAvatar'), getRoomAvatar(room), title.slice(0,2));
       const messages = state.threads[room.id] || [];
       const html = messages.length ? messages.map(msg => msg.side === 'me'
-        ? `<div class="msg me"><div class="msg-stack"><div class="msg-line"><div class="msg-time">${escapeHtml(msg.time)}</div><div class="bubble">${escapeHtml(msg.text)}</div></div></div></div>`
-        : `<div class="msg other"><div class="msg-avatar avatar-core" data-avatar="${escapeHtml(getRoomAvatar(room))}" data-fallback="${escapeHtml(title.slice(0,2))}"></div><div class="msg-stack"><div class="msg-name">${escapeHtml(msg.name || title)}</div><div class="msg-line"><div class="bubble">${escapeHtml(msg.text)}</div><div class="msg-time">${escapeHtml(msg.time)}</div></div></div></div>`
+        ? `<div class="msg me"><div class="msg-stack"><div class="msg-line"><div class="msg-time">${escapeHtml(msg.time)}</div><div class="bubble">${renderBubbleContent(msg.text)}</div></div></div></div>`
+        : `<div class="msg other"><div class="msg-avatar avatar-core" data-avatar="${escapeHtml(getRoomAvatar(room))}" data-fallback="${escapeHtml(title.slice(0,2))}"></div><div class="msg-stack"><div class="msg-name">${escapeHtml(msg.name || title)}</div><div class="msg-line"><div class="bubble">${renderBubbleContent(msg.text)}</div><div class="msg-time">${escapeHtml(msg.time)}</div></div></div></div>`
       ).join('') : '<div class="day-badge">暂无消息</div>';
       $('#thread').innerHTML = `<div class="day-badge">今天</div>${html}`;
       $$('#thread [data-avatar]').forEach(el => applyAvatar(el, el.dataset.avatar, el.dataset.fallback));
