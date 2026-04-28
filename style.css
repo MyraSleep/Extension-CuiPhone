@@ -74,28 +74,24 @@
 }
 #cui-phone-root .cui-phone-close:hover { background: #0f172a; }
 
-/* ---- Small viewport: shrink the whole shell via transform ---- *
- * We change `transform-origin` to bottom-right so the phone stays
- * pinned to the FAB anchor. Width/height stay declared above so
- * layout doesn't collapse.
+/* ---- User-adjustable scale via CSS variable ----
+ * Default 1.0 = full 390x844. Users can set localStorage 'cuiphone:scale'
+ * (handled in index.js) and we apply it here via --cui-scale.
  */
-@media (max-height: 920px) {
-    #cui-phone-root .cui-phone-shell {
-        transform: scale(0.85);
-        transform-origin: bottom right;
-    }
+#cui-phone-root .cui-phone-shell {
+    transform: scale(var(--cui-scale, 1));
+    transform-origin: bottom right;
 }
-@media (max-height: 760px) {
-    #cui-phone-root .cui-phone-shell {
-        transform: scale(0.7);
-        transform-origin: bottom right;
-    }
+
+/* Only auto-shrink when the viewport literally cannot fit the phone. */
+@media (max-height: 880px) {
+    #cui-phone-root .cui-phone-shell { transform: scale(calc(var(--cui-scale, 1) * 0.92)); }
 }
-@media (max-height: 620px) {
-    #cui-phone-root .cui-phone-shell {
-        transform: scale(0.58);
-        transform-origin: bottom right;
-    }
+@media (max-height: 780px) {
+    #cui-phone-root .cui-phone-shell { transform: scale(calc(var(--cui-scale, 1) * 0.8)); }
+}
+@media (max-height: 660px) {
+    #cui-phone-root .cui-phone-shell { transform: scale(calc(var(--cui-scale, 1) * 0.65)); }
 }
 
 @media (max-width: 480px) {
@@ -107,8 +103,6 @@
     #cui-phone-root .cui-phone-shell {
         right: 0;
         bottom: 60px;
-        transform: scale(0.8);
-        transform-origin: bottom right;
     }
 }
 

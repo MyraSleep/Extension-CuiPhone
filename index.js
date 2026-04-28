@@ -162,6 +162,29 @@ function getSettings() {
     root.querySelector('#cui-phone-close').onclick = () => root.classList.add('cui-collapsed');
     if (!settings.startCollapsed) root.classList.remove('cui-collapsed');
 
+    // ---- User-adjustable scale (Ctrl + wheel inside the phone) ----
+    const SCALE_KEY = 'cuiphone:scale';
+    function applyScale(s) {
+        const clamped = Math.max(0.5, Math.min(1.6, s));
+        root.style.setProperty('--cui-scale', String(clamped));
+        try { localStorage.setItem(SCALE_KEY, String(clamped)); } catch(_){}
+    }
+    try {
+        const saved = parseFloat(localStorage.getItem(SCALE_KEY) || '');
+        if (!isNaN(saved) && saved > 0) applyScale(saved);
+    } catch(_){}
+    root.addEventListener('wheel', (e) => {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        const cur = parseFloat(getComputedStyle(root).getPropertyValue('--cui-scale')) || 1;
+        const next = cur + (e.deltaY < 0 ? 0.05 : -0.05);
+        applyScale(next);
+    }, { passive: false });
+    // Expose for manual override from console: window.CuiPhone.setScale(1.2)
+    window.CuiPhone = window.CuiPhone || {};
+    window.CuiPhone.setScale = applyScale;
+    window.CuiPhone.getScale = () => parseFloat(getComputedStyle(root).getPropertyValue('--cui-scale')) || 1;
+
     // Wire ST <-> phone (chat sync, send-back, events)
     try {
         wireSTBridge(ctx, window.CuiPhone);
