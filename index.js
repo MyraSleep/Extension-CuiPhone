@@ -312,23 +312,63 @@ function getSettings() {
         if (didMove) { e.preventDefault(); e.stopPropagation(); didMove = false; return; }
         toggle();
     });
-    // Belt-and-braces: some hosts (or the host page's CSS layer order)
-    // intercept click. We watch click; if it doesn't arrive within 250ms
-    // after a clean mouseup with no drag, we force-toggle. The flag is reset
-    // by the click handler so a normal click is a no-op for this fallback.
-    let _clickFired = false;
-    fab.addEventListener('click', () => { _clickFired = true; }, true);
-    fab.addEventListener('mouseup', (e) => {
-        if (e.button !== 0) return;
-        if (didMove) return;
-        _clickFired = false;
+
+    // ---- HARD FALLBACK: window-level capture-phase click handler ----
+    // ST in mobile/split-screen mode (≤1000px) makes #sheld and various
+    // drawers 100dvw with high z-index. These can sit on top of the FAB and
+    // intercept its click events even though the FAB is visible. Listening
+    // on `window` at the capture phase fires BEFORE any host handler, and
+    // hit-testing by coordinates lets us detect a click "through" any layer.
+    function pointHitsFab(x, y) {
+        const r = fab.getBoundingClientRect();
+        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    }
+    function pointHitsCloseBtn(x, y) {
+        const close = root.querySelector('#cui-phone-close');
+        if (!close || root.classList.contains('cui-collapsed')) return false;
+        const r = close.getBoundingClientRect();
+        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    }
+    let _winDownX = 0, _winDownY = 0, _winDownOnFab = false;
+    window.addEventListener('pointerdown', (e) => {
+        _winDownX = e.clientX; _winDownY = e.clientY;
+        _winDownOnFab = pointHitsFab(e.clientX, e.clientY);
+    }, { capture: true });
+    window.addEventListener('pointerup', (e) => {
+        const dx = e.clientX - _winDownX, dy = e.clientY - _winDownY;
+        const moved = Math.abs(dx) + Math.abs(dy) > 4;
+        // Close button takes priority when phone is open.
+        if (!moved && pointHitsCloseBtn(e.clientX, e.clientY)) {
+            e.preventDefault(); e.stopPropagation();
+            root.classList.add('cui-collapsed');
+            return;
+        }
+        if (!_winDownOnFab) return;
+        if (moved) return;  // drag handled by FAB's own listeners
+        if (!pointHitsFab(e.clientX, e.clientY)) return;
+        // We have a clean click on the FAB at the window-capture level.
+        // If the FAB's own click would also fire, double-toggle would result.
+        // Solve by deferring + checking if state still needs change.
+        const wasCollapsed = root.classList.contains('cui-collapsed');
         setTimeout(() => {
-            if (!_clickFired && !didMove) {
-                console.warn('[CUI Phone] click suppressed by host; forcing toggle');
+            const isCollapsed = root.classList.contains('cui-collapsed');
+            if (wasCollapsed === isCollapsed) {
+                // FAB's click never landed — force the toggle now.
+                console.warn('[CUI Phone] FAB click was blocked by host; toggling via window fallback');
                 toggle();
             }
-        }, 250);
-    });
+        }, 50);
+    }, { capture: true });
+
+    // Periodic hoist: if some ST drawer reparents/overlays us, re-append the
+    // root to body's tail every couple seconds so we end up on top in DOM
+    // order (which matters when z-index alone isn't enough due to stacking
+    // contexts). This is cheap and self-healing.
+    setInterval(() => {
+        if (document.body && document.body.lastElementChild !== root) {
+            document.body.appendChild(root);
+        }
+    }, 2000);
     root.querySelector('#cui-phone-close').onclick = () => root.classList.add('cui-collapsed');
 
     // Re-clamp FAB on viewport resize so it never escapes off-screen,
