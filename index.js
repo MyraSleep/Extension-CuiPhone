@@ -68,8 +68,8 @@ function buildRoot() {
     // didn't load (e.g. cache miss, manifest css line ignored, etc.).
     root.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483600;pointer-events:none;';
     root.innerHTML = `
-        <button class="cui-phone-fab" id="cui-phone-fab" title="Phone"
-            style="position:fixed;right:16px;bottom:16px;width:52px;height:52px;border-radius:50%;border:none;background:linear-gradient(135deg,#0a84ff,#6228d7);color:#fff;font-size:22px;cursor:grab;box-shadow:0 12px 32px rgba(15,23,42,.35);display:grid;place-items:center;z-index:2147483601;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;">📱</button>
+        <button class="cui-phone-fab" id="cui-phone-fab" title="Phone (右键重置位置)"
+            style="position:fixed;right:16px;bottom:16px;width:40px;height:40px;border-radius:50%;border:none;background:linear-gradient(135deg,#0a84ff,#6228d7);color:#fff;font-size:18px;cursor:grab;box-shadow:0 8px 22px rgba(15,23,42,.32);display:grid;place-items:center;z-index:2147483601;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;opacity:.92;">📱</button>
         <div class="cui-phone-shell">
             <button class="cui-phone-close" id="cui-phone-close" title="Close">✕</button>
             <div class="cui-phone-mount" id="cui-phone-mount"></div>
@@ -191,8 +191,8 @@ if (window.__cuiPhoneBooted) {
     }
     function clampFabPos(p) {
         // Keep at least the FAB visible inside the viewport.
-        const fw = fab.offsetWidth || 52;
-        const fh = fab.offsetHeight || 52;
+        const fw = fab.offsetWidth || 40;
+        const fh = fab.offsetHeight || 40;
         const left = Math.max(0, Math.min(window.innerWidth - fw, p.left));
         const top = Math.max(0, Math.min(window.innerHeight - fh, p.top));
         return { left, top };
@@ -279,8 +279,8 @@ if (window.__cuiPhoneBooted) {
         // 6px threshold (was 4): higher = fewer accidental drags from finger tremor.
         if (!didMove && (Math.abs(dx) + Math.abs(dy) > 6)) didMove = true;
         if (!didMove) return;
-        const fw = fab.offsetWidth || 52;
-        const fh = fab.offsetHeight || 52;
+        const fw = fab.offsetWidth || 40;
+        const fh = fab.offsetHeight || 40;
         const nx = Math.max(0, Math.min(window.innerWidth - fw, ox + dx));
         const ny = Math.max(0, Math.min(window.innerHeight - fh, oy + dy));
         fab.style.left = nx + 'px';
@@ -292,11 +292,20 @@ if (window.__cuiPhoneBooted) {
         if (!dragging) return;
         dragging = false;
         fab.classList.remove('dragging');
+        const wasDrag = didMove;
         if (didMove) {
             const rect = fab.getBoundingClientRect();
             saveFabPos(rect.left, rect.top);
         }
         try { if (e && e.pointerId != null) fab.releasePointerCapture(e.pointerId); } catch (_) {}
+        // Reset didMove on the next tick so the click event that follows
+        // pointerup can still see it (to suppress a toggle if the user dragged).
+        // Then it MUST go back to false so the very next click works.
+        if (wasDrag) {
+            setTimeout(() => { didMove = false; }, 0);
+        } else {
+            didMove = false;
+        }
     }
     fab.addEventListener('pointerup', endDrag);
     fab.addEventListener('pointercancel', endDrag);
@@ -330,7 +339,13 @@ if (window.__cuiPhoneBooted) {
         }
     };
     fab.addEventListener('click', (e) => {
-        if (didMove) { e.preventDefault(); e.stopPropagation(); didMove = false; return; }
+        // If this click is the natural follow-up to a drag, swallow it once.
+        if (didMove) {
+            e.preventDefault();
+            e.stopPropagation();
+            didMove = false;
+            return;
+        }
         toggle();
     });
 
